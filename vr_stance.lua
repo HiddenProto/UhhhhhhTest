@@ -16,15 +16,7 @@ local RunService = cloneref(game:GetService("RunService"))
 local TweenService = cloneref(game:GetService("TweenService"))
 local Players = cloneref(game:GetService("Players"))
 local UserInputService = cloneref(game:GetService("UserInputService"))
-local StarterGui = cloneref(game:GetService("StarterGui"))
 local Player = Players.LocalPlayer
-
--- [DEBUG] temporary on-screen notify to diagnose the joysticks
-local function DbgNotify(text)
-	pcall(function()
-		StarterGui:SetCore("SendNotification", { Title = "VRStance", Text = tostring(text), Duration = 4 })
-	end)
-end
 
 AddModule(function()
 	local VRService = cloneref(game:GetService("VRService"))
@@ -38,7 +30,6 @@ AddModule(function()
 	m.Config = function(parent: GuiBase2d)
 		Util_CreateSwitch(parent, "Proper Arm Control (joysticks)", ProperArms).Changed:Connect(function(v)
 			ProperArms = v
-			DbgNotify("ProperArms = " .. tostring(v))
 		end)
 	end
 
@@ -304,11 +295,11 @@ AddModule(function()
 		base.Name = "Uhhhhhh_ArmJoy"
 		base.AnchorPoint = Vector2.new(0.5, 0.5)
 		base.Position = UDim2.new(sideScale, sideOff, 0.62, 0)
-		base.Size = UDim2.fromOffset(120, 120)
-		base.BackgroundColor3 = Color3.new(1, 0, 0) -- [DEBUG] bright red to confirm it renders
-		base.BackgroundTransparency = 0.2
+		base.Size = UDim2.fromOffset(150, 150)
+		base.BackgroundColor3 = Color3.new(0, 0, 0) -- black, very transparent
+		base.BackgroundTransparency = 0.8
 		base.BorderSizePixel = 0
-		base.Visible = true -- [DEBUG] start visible
+		base.Visible = false
 		base.Active = true -- sink input so dragging the stick doesn't pan camera/move
 		base.ZIndex = 2
 		base.Parent = JoyGui
@@ -316,13 +307,13 @@ AddModule(function()
 		local st = Instance.new("UIStroke", base)
 		st.Color = Color3.new(1, 1, 1)
 		st.Thickness = 1.5
-		st.Transparency = 0.35
+		st.Transparency = 0.7
 		local knob = Instance.new("Frame")
 		knob.AnchorPoint = Vector2.new(0.5, 0.5)
 		knob.Position = UDim2.fromScale(0.5, 0.5)
-		knob.Size = UDim2.fromOffset(52, 52)
-		knob.BackgroundColor3 = Color3.new(1, 1, 1)
-		knob.BackgroundTransparency = 0.15
+		knob.Size = UDim2.fromOffset(66, 66)
+		knob.BackgroundColor3 = Color3.new(0.5, 0.5, 0.5) -- gray, transparent
+		knob.BackgroundTransparency = 0.5
 		knob.BorderSizePixel = 0
 		knob.ZIndex = 3
 		knob.Parent = base
@@ -491,11 +482,10 @@ AddModule(function()
 		if not guiparent then guiparent = Player:FindFirstChildOfClass("PlayerGui") end
 		JoyGui.Parent = guiparent
 		-- Build the two aim joysticks (left-arm on the left, right-arm on the right).
-		LeftJoy = MakeJoy(0, 100)
-		RightJoy = MakeJoy(1, -100)
+		LeftJoy = MakeJoy(0, 90)
+		RightJoy = MakeJoy(1, -90)
 		WireJoy(LeftJoy)
 		WireJoy(RightJoy)
-		DbgNotify("joysticks built, parent=" .. tostring(JoyGui.Parent and JoyGui.Parent.ClassName or "NIL"))
 	end
 	m.Update = function(dt: number, figure: Model)
 		local t = os.clock()
@@ -503,9 +493,9 @@ AddModule(function()
 		isdancing = not not figure:GetAttribute("IsDancing")
 		rcp.FilterDescendantsInstances = {figure, Player.Character}
 
-		-- [DEBUG] force the joysticks visible regardless of the toggle, to test rendering.
-		if LeftJoy then LeftJoy.Base.Visible = not isdancing end
-		if RightJoy then RightJoy.Base.Visible = not isdancing end
+		-- Show the aim joysticks only while proper arm control is enabled.
+		if LeftJoy then LeftJoy.Base.Visible = ProperArms and not isdancing end
+		if RightJoy then RightJoy.Base.Visible = ProperArms and not isdancing end
 
 		-- get vii
 		hum = figure:FindFirstChild("Humanoid")
