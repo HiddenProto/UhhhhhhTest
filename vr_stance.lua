@@ -184,9 +184,9 @@ AddModule(function()
 			local orig = torso.CFrame * (leg.Offset * scale)
 			local foot
 			if Crouching then
-				-- crouched idle: feet planted clearly out IN FRONT (legs-in-front look,
-				-- like the regular standing idle), only slightly lowered.
-				foot = orig + root.CFrame.LookVector * (1.85 * scale) - Vector3.new(0, 0.5 * scale, 0)
+				-- crouched idle: feet hang DOWN and slightly forward (legs angled like the
+				-- regular standing idle, not stuck straight out — that looked like sitting).
+				foot = orig + root.CFrame.LookVector * (0.85 * scale) - Vector3.new(0, 1.45 * scale, 0)
 			elseif StanceUpright then
 				-- upright stance: feet straight down under the hips (legs straight, taller)
 				foot = orig - Vector3.new(0, 1.9 * scale, 0)
@@ -526,7 +526,7 @@ AddModule(function()
 
 		-- [STANCE] Smoothly raise the body while standing upright + idle so the
 		-- straightened legs reach the floor instead of sinking into it.
-		local liftTarget = (StanceUpright and not Crouching and hum.MoveDirection.Magnitude < 0.1) and 1.0 or 0
+		local liftTarget = (StanceUpright and not Crouching and hum.MoveDirection.Magnitude < 0.1) and 0.5 or 0
 		StanceLift = liftTarget + (StanceLift - liftTarget) * math.exp(-16 * dt)
 
 		if not isdancing then
