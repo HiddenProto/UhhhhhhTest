@@ -146,6 +146,7 @@ AddModule(function()
 	local FakeVRArms = {}
 	local Crouching = false
 	local StanceUpright = false -- [STANCE] false = original legs-in-front idle, true = legs straight down
+	local StanceLift = 0 -- [STANCE] smooth body lift while upright idle so feet aren't in the ground
 	local ProperArms = false -- [ARMS] false = M1/M2 point, true = on-screen joysticks aim the arms
 	local LeftJoy, RightJoy -- joystick objects {Base,Knob,Held,Vec,Input}
 	local JoyGui -- dedicated always-on-top ScreenGui that holds the joysticks
@@ -183,8 +184,9 @@ AddModule(function()
 			local orig = torso.CFrame * (leg.Offset * scale)
 			local foot
 			if Crouching then
-				-- crouched idle: feet planted out in front + down (legs-in-front look)
-				foot = orig + root.CFrame.LookVector * (1.25 * scale) - Vector3.new(0, 1.05 * scale, 0)
+				-- crouched idle: feet planted clearly out IN FRONT (legs-in-front look,
+				-- like the regular standing idle), only slightly lowered.
+				foot = orig + root.CFrame.LookVector * (1.85 * scale) - Vector3.new(0, 0.5 * scale, 0)
 			elseif StanceUpright then
 				-- upright stance: feet straight down under the hips (legs straight, taller)
 				foot = orig - Vector3.new(0, 1.9 * scale, 0)
@@ -519,10 +521,15 @@ AddModule(function()
 			CrouchDistance *= math.exp(-16 * dt)
 		end
 
+		-- [STANCE] Smoothly raise the body while standing upright + idle so the
+		-- straightened legs reach the floor instead of sinking into it.
+		local liftTarget = (StanceUpright and not Crouching and hum.MoveDirection.Magnitude < 0.1) and 1.0 or 0
+		StanceLift = liftTarget + (StanceLift - liftTarget) * math.exp(-16 * dt)
+
 		if not isdancing then
 			rj.Enabled, nj.Enabled, rsj.Enabled, lsj.Enabled, rhj.Enabled, lhj.Enabled = false, false, false, false, false, false
 			--hum.HipHeight = 2 * scale
-			hum.HipHeight = 2 * scale - 2 - CrouchDistance * scale
+			hum.HipHeight = 2 * scale - 2 - CrouchDistance * scale + StanceLift * scale
 			root.CustomPhysicalProperties = PhysicalProperties.new(3.15, 0.3, 0.5)
 			local head = figure:FindFirstChild("Head")
 			local rarm = figure:FindFirstChild("Right Arm")
