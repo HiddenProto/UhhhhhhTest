@@ -148,6 +148,7 @@ AddModule(function()
 	local StanceUpright = false -- [STANCE] false = original legs-in-front idle, true = legs straight down
 	local ProperArms = false -- [ARMS] false = M1/M2 point, true = on-screen joysticks aim the arms
 	local LeftJoy, RightJoy -- joystick objects {Base,Knob,Held,Vec,Input}
+	local JoyGui -- dedicated always-on-top ScreenGui that holds the joysticks
 	local JoyConns = {}
 	local CrouchDistance = 0
 	local TorsoRotation = CFrame.identity
@@ -173,16 +174,29 @@ AddModule(function()
 			end
 		end
 		local real = CFrame.Angles(last.X, last.Y, last.Z)
-		-- [STANCE] Upright stance: while idle (no movement input) and not crouching,
-		-- plant the leg straight down under the hip instead of stepping it out in
-		-- front. This overrides the stepping logic entirely so it's always visible.
-		if StanceUpright and not Crouching and hum.MoveDirection.Magnitude < 0.1 then
+		-- [STANCE] Decisive idle leg posing. While standing still (no movement input)
+		-- we plant the feet at a fixed clean target instead of the dynamic stepping,
+		-- which avoids the legs flipping/twisting (esp. while crouched with a leaning
+		-- back). Pole points straight down + slightly forward so knees bend forward,
+		-- not behind. Walking falls through to the original stepping logic below.
+		if hum.MoveDirection.Magnitude < 0.1 then
 			local orig = torso.CFrame * (leg.Offset * scale)
-			local foot = orig + Vector3.new(0, -1.9 * scale, 0)
-			leg.Position, leg.Target, leg.InAir = foot, foot, false
-			leg.Timer = leg.Timer % 1
-			local poledir = root.CFrame.Rotation * Vector3.new(leg.Offset.X, 0, -2)
-			return IK2Bone(orig, foot, poledir, 0.7 * scale, 1.2 * scale) * real * CFrame.Angles(1.57, 0, 0) * CFrame.new(0, 1 * scale, 0)
+			local foot
+			if Crouching then
+				-- crouched idle: feet planted out in front + down (legs-in-front look)
+				foot = orig + root.CFrame.LookVector * (1.25 * scale) - Vector3.new(0, 1.05 * scale, 0)
+			elseif StanceUpright then
+				-- upright stance: feet straight down under the hips (legs straight, taller)
+				foot = orig - Vector3.new(0, 1.9 * scale, 0)
+			end
+			if foot then
+				leg.Position, leg.Target, leg.InAir = foot, foot, false
+				leg.Timer = leg.Timer % 1
+				-- pole/bend reference: mostly downward, leaning forward, in world space
+				-- so the leaning torso doesn't drag the knee direction behind the back.
+				local poledir = (root.CFrame.LookVector * 0.5 - Vector3.new(0, 1, 0)).Unit
+				return IK2Bone(orig, foot, poledir, 0.7 * scale, 1.2 * scale) * real * CFrame.Angles(1.57, 0, 0) * CFrame.new(0, 1 * scale, 0)
+			end
 		end
 		local onground = hum:GetState() == Enum.HumanoidStateType.Running
 		local origin = torso.CFrame * (leg.Offset * scale) + root.CFrame.LookVector * scale + root.Velocity * (LEG_MOVE_TIME * 0.6)
@@ -291,7 +305,7 @@ AddModule(function()
 		base.Visible = false
 		base.Active = true -- sink input so dragging the stick doesn't pan camera/move
 		base.ZIndex = 2
-		base.Parent = HiddenGui
+		base.Parent = JoyGui
 		Instance.new("UICorner", base).CornerRadius = UDim.new(1, 0)
 		local st = Instance.new("UIStroke", base)
 		st.Color = Color3.new(1, 1, 1)
@@ -454,7 +468,20 @@ AddModule(function()
 		end, true, Enum.KeyCode.F)
 		ContextActions:SetTitle("Uhhhhhh_VRStance", "Stance")
 		ContextActions:SetPosition("Uhhhhhh_VRStance", UDim2.new(1, -230, 1, -230))
-		-- [ARMS] Build the two aim joysticks (left-arm on the left, right-arm on the right).
+		-- [ARMS] Dedicated always-on-top ScreenGui for the joysticks (so they aren't
+		-- hidden behind the menu and don't depend on the main GUI's z-order).
+		JoyGui = Instance.new("ScreenGui")
+		JoyGui.Name = "Uhhhhhh_ArmJoysticks"
+		JoyGui.ResetOnSpawn = false
+		JoyGui.IgnoreGuiInset = true
+		JoyGui.DisplayOrder = 100000
+		JoyGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+		local guiparent
+		pcall(function() guiparent = gethiddengui and gethiddengui() end)
+		if not guiparent then guiparent = HiddenGui end
+		if not guiparent then pcall(function() guiparent = cloneref(game:GetService("CoreGui")) end) end
+		JoyGui.Parent = guiparent
+		-- Build the two aim joysticks (left-arm on the left, right-arm on the right).
 		LeftJoy = MakeJoy(0, 100)
 		RightJoy = MakeJoy(1, -100)
 		WireJoy(LeftJoy)
@@ -558,8 +585,8 @@ AddModule(function()
 		-- [ARMS] tear down joysticks + their input connections
 		for _, c in JoyConns do pcall(function() c:Disconnect() end) end
 		table.clear(JoyConns)
-		if LeftJoy then LeftJoy.Base:Destroy() LeftJoy = nil end
-		if RightJoy then RightJoy.Base:Destroy() RightJoy = nil end
+		LeftJoy, RightJoy = nil, nil
+		if JoyGui then JoyGui:Destroy() JoyGui = nil end
 	end
 	return m
 end)
