@@ -15,6 +15,7 @@ cloneref = cloneref or function(o) return o end
 local RunService = cloneref(game:GetService("RunService"))
 local TweenService = cloneref(game:GetService("TweenService"))
 local Players = cloneref(game:GetService("Players"))
+local UserInputService = cloneref(game:GetService("UserInputService"))
 local Player = Players.LocalPlayer
 
 AddModule(function()
@@ -27,6 +28,9 @@ AddModule(function()
 	m.Assets = {}
 
 	m.Config = function(parent: GuiBase2d)
+		Util_CreateSwitch(parent, "Proper Arm Control (joysticks)", ProperArms).Changed:Connect(function(v)
+			ProperArms = v
+		end)
 	end
 
 	local scale, isdancing = 1, false
@@ -142,6 +146,9 @@ AddModule(function()
 	local FakeVRArms = {}
 	local Crouching = false
 	local StanceUpright = false -- [STANCE] false = original legs-in-front idle, true = legs straight down
+	local ProperArms = false -- [ARMS] false = M1/M2 point, true = on-screen joysticks aim the arms
+	local LeftJoy, RightJoy -- joystick objects {Base,Knob,Held,Vec,Input}
+	local JoyConns = {}
 	local CrouchDistance = 0
 	local TorsoRotation = CFrame.identity
 
@@ -166,16 +173,20 @@ AddModule(function()
 			end
 		end
 		local real = CFrame.Angles(last.X, last.Y, last.Z)
-		local onground = hum:GetState() == Enum.HumanoidStateType.Running
-		-- [STANCE] In the upright stance, while standing still and not crouching,
-		-- drop the forward foot push so the feet plant straight under the hips
-		-- (legs straight, character stands taller). Walking/crouch keep the original feel.
-		local fwd = root.CFrame.LookVector
-		if StanceUpright and not Crouching and root.Velocity.Magnitude < 2 then
-			fwd = Vector3.zero
+		-- [STANCE] Upright stance: while idle (no movement input) and not crouching,
+		-- plant the leg straight down under the hip instead of stepping it out in
+		-- front. This overrides the stepping logic entirely so it's always visible.
+		if StanceUpright and not Crouching and hum.MoveDirection.Magnitude < 0.1 then
+			local orig = torso.CFrame * (leg.Offset * scale)
+			local foot = orig + Vector3.new(0, -1.9 * scale, 0)
+			leg.Position, leg.Target, leg.InAir = foot, foot, false
+			leg.Timer = leg.Timer % 1
+			local poledir = root.CFrame.Rotation * Vector3.new(leg.Offset.X, 0, -2)
+			return IK2Bone(orig, foot, poledir, 0.7 * scale, 1.2 * scale) * real * CFrame.Angles(1.57, 0, 0) * CFrame.new(0, 1 * scale, 0)
 		end
-		local origin = torso.CFrame * (leg.Offset * scale) + fwd * scale + root.Velocity * (LEG_MOVE_TIME * 0.6)
-		local dir = (Vector3.new(0, -3, 0) - fwd * 1.5) * scale
+		local onground = hum:GetState() == Enum.HumanoidStateType.Running
+		local origin = torso.CFrame * (leg.Offset * scale) + root.CFrame.LookVector * scale + root.Velocity * (LEG_MOVE_TIME * 0.6)
+		local dir = (Vector3.new(0, -3, 0) - root.CFrame.LookVector * 1.5) * scale
 		if hum:GetState() == Enum.HumanoidStateType.Climbing then
 			onground = true
 			origin = torso.CFrame * (leg.Offset * scale) + Vector3.new(0, -0.5, 0) * scale
@@ -216,7 +227,7 @@ AddModule(function()
 		end
 		return IK2Bone(orig, tgt, dir, 0.7 * scale, 1.2 * scale) * real * CFrame.Angles(1.57, 0, 0) * CFrame.new(0, 1 * scale, 0)
 	end
-	local function ProcessArms(arm, dt, vro, headcf)
+	local function ProcessArms(arm, dt, vro, headcf, js)
 		local last
 		for _=1, 1 do
 			last = Vector3.new(math.random() * 2 - 1, math.random() * 2 - 1, math.random() * 2 - 1) * 0.5
@@ -225,19 +236,32 @@ AddModule(function()
 				arm.Realism[i] = last
 			end
 		end
-		local cast = PhysicsRaycast(vro.Position, headcf.LookVector * 32 * scale)
-		if cast then
-			cast = (cast.Position - vro.Position - arm.Offset.Position).Unit
-			if cast ~= cast or cast.Magnitude == 0 then
+		local cast
+		local pointing
+		if ProperArms and js then
+			-- [ARMS] Joystick aim, camera-relative. Centre -> forward, the stick tilts
+			-- the aim up/down/left/right. Released -> arm falls back to its rest (down) pose.
+			pointing = js.Held
+			local cam = ReanimCamera.CFrame
+			local dir = cam.LookVector + cam.RightVector * (js.Vec.X * 1.3) + cam.UpVector * (js.Vec.Y * 1.3)
+			if dir.Magnitude < 1e-3 then dir = cam.LookVector end
+			cast = dir.Unit
+		else
+			pointing = arm.Waving
+			cast = PhysicsRaycast(vro.Position, headcf.LookVector * 32 * scale)
+			if cast then
+				cast = (cast.Position - vro.Position - arm.Offset.Position).Unit
+				if cast ~= cast or cast.Magnitude == 0 then
+					cast = headcf.LookVector
+				end
+			else
 				cast = headcf.LookVector
 			end
-		else
-			cast = headcf.LookVector
 		end
 		local ha = CFrame.new(0, -0.5, 0) * CFrame.Angles(0.3 + last.X, last.Y, last.Z) * CFrame.new(0, -0.4, 0) * CFrame.Angles(-1.57, 0, 0)
 		local hb = CFrame.lookAlong(Vector3.zero, cast) * CFrame.new(0, 0, -0.5) * CFrame.Angles(last.X, last.Y, last.Z) * CFrame.new(0, 0, -0.5)
 		local tm = arm.Timer
-		if arm.Waving then
+		if pointing then
 			tm = math.min(1, tm + dt / 0.2)
 		else
 			tm = math.max(0, tm - dt / 0.2)
@@ -246,6 +270,69 @@ AddModule(function()
 		return arm.Offset * ha:Lerp(hb, TweenService:GetValue(tm, Enum.EasingStyle.Cubic, Enum.EasingDirection.InOut))
 	end
 
+	-- [ARMS] On-screen joystick used to aim an arm (mobile-friendly; also works with mouse).
+	local function UpdateJoy(js, screenpos)
+		local center = js.Base.AbsolutePosition + js.Base.AbsoluteSize / 2
+		local radius = js.Base.AbsoluteSize.X / 2
+		local delta = Vector2.new(screenpos.X, screenpos.Y) - center
+		if delta.Magnitude > radius then delta = delta.Unit * radius end
+		js.Knob.Position = UDim2.new(0.5, delta.X, 0.5, delta.Y)
+		js.Vec = Vector2.new(delta.X / radius, -delta.Y / radius) -- y up = positive
+	end
+	local function MakeJoy(sideScale, sideOff)
+		local base = Instance.new("Frame")
+		base.Name = "Uhhhhhh_ArmJoy"
+		base.AnchorPoint = Vector2.new(0.5, 0.5)
+		base.Position = UDim2.new(sideScale, sideOff, 0.62, 0)
+		base.Size = UDim2.fromOffset(120, 120)
+		base.BackgroundColor3 = Color3.new(0, 0, 0)
+		base.BackgroundTransparency = 0.55
+		base.BorderSizePixel = 0
+		base.Visible = false
+		base.Active = true -- sink input so dragging the stick doesn't pan camera/move
+		base.ZIndex = 2
+		base.Parent = HiddenGui
+		Instance.new("UICorner", base).CornerRadius = UDim.new(1, 0)
+		local st = Instance.new("UIStroke", base)
+		st.Color = Color3.new(1, 1, 1)
+		st.Thickness = 1.5
+		st.Transparency = 0.35
+		local knob = Instance.new("Frame")
+		knob.AnchorPoint = Vector2.new(0.5, 0.5)
+		knob.Position = UDim2.fromScale(0.5, 0.5)
+		knob.Size = UDim2.fromOffset(52, 52)
+		knob.BackgroundColor3 = Color3.new(1, 1, 1)
+		knob.BackgroundTransparency = 0.15
+		knob.BorderSizePixel = 0
+		knob.ZIndex = 3
+		knob.Parent = base
+		Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+		return { Base = base, Knob = knob, Held = false, Vec = Vector2.zero, Input = nil }
+	end
+	local function WireJoy(js)
+		table.insert(JoyConns, js.Base.InputBegan:Connect(function(input)
+			if not ProperArms then return end
+			if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+				js.Held = true
+				js.Input = input
+				UpdateJoy(js, input.Position)
+			end
+		end))
+		table.insert(JoyConns, UserInputService.InputChanged:Connect(function(input)
+			if not js.Held or not js.Input then return end
+			if input == js.Input or (js.Input.UserInputType == Enum.UserInputType.MouseButton1 and input.UserInputType == Enum.UserInputType.MouseMovement) then
+				UpdateJoy(js, input.Position)
+			end
+		end))
+		table.insert(JoyConns, UserInputService.InputEnded:Connect(function(input)
+			if js.Held and js.Input and (input == js.Input or input.UserInputType == js.Input.UserInputType) then
+				js.Held = false
+				js.Input = nil
+				js.Vec = Vector2.zero
+				js.Knob.Position = UDim2.fromScale(0.5, 0.5)
+			end
+		end))
+	end
 	m.Init = function(figure: Model)
 		hum = figure:FindFirstChild("Humanoid")
 		root = figure:FindFirstChild("HumanoidRootPart")
@@ -367,12 +454,21 @@ AddModule(function()
 		end, true, Enum.KeyCode.F)
 		ContextActions:SetTitle("Uhhhhhh_VRStance", "Stance")
 		ContextActions:SetPosition("Uhhhhhh_VRStance", UDim2.new(1, -230, 1, -230))
+		-- [ARMS] Build the two aim joysticks (left-arm on the left, right-arm on the right).
+		LeftJoy = MakeJoy(0, 100)
+		RightJoy = MakeJoy(1, -100)
+		WireJoy(LeftJoy)
+		WireJoy(RightJoy)
 	end
 	m.Update = function(dt: number, figure: Model)
 		local t = os.clock()
 		scale = figure:GetScale()
 		isdancing = not not figure:GetAttribute("IsDancing")
 		rcp.FilterDescendantsInstances = {figure, Player.Character}
+
+		-- [ARMS] Show the aim joysticks only while proper arm control is enabled.
+		if LeftJoy then LeftJoy.Base.Visible = ProperArms and not isdancing end
+		if RightJoy then RightJoy.Base.Visible = ProperArms and not isdancing end
 
 		-- get vii
 		hum = figure:FindFirstChild("Humanoid")
@@ -427,8 +523,8 @@ AddModule(function()
 					end
 				end
 				chead = CFrame.new(0, -0.5, 0) * CFrame.fromEulerAngles(x, y, z, Enum.RotationOrder.YXZ) * CFrame.new(0, 0.5, 0) + Vector3.new(0, -CrouchDistance, 0)
-				clarm = ProcessArms(FakeVRArms[1], dt, vro, chead) + Vector3.new(0, -CrouchDistance, 0)
-				crarm = ProcessArms(FakeVRArms[2], dt, vro, chead) + Vector3.new(0, -CrouchDistance, 0)
+				clarm = ProcessArms(FakeVRArms[1], dt, vro, chead, LeftJoy) + Vector3.new(0, -CrouchDistance, 0)
+				crarm = ProcessArms(FakeVRArms[2], dt, vro, chead, RightJoy) + Vector3.new(0, -CrouchDistance, 0)
 			end
 			chead += chead.Position * (scale - 1)
 			clarm += clarm.Position * (scale - 1)
@@ -459,6 +555,11 @@ AddModule(function()
 		ContextActions:UnbindAction("Uhhhhhh_VRCrouch")
 		ContextActions:UnbindAction("Uhhhhhh_VRRun")
 		ContextActions:UnbindAction("Uhhhhhh_VRStance")
+		-- [ARMS] tear down joysticks + their input connections
+		for _, c in JoyConns do pcall(function() c:Disconnect() end) end
+		table.clear(JoyConns)
+		if LeftJoy then LeftJoy.Base:Destroy() LeftJoy = nil end
+		if RightJoy then RightJoy.Base:Destroy() RightJoy = nil end
 	end
 	return m
 end)
