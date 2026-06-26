@@ -478,10 +478,13 @@ AddModule(function()
 		JoyGui.IgnoreGuiInset = true
 		JoyGui.DisplayOrder = 100000
 		JoyGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+		JoyGui.Enabled = true
+		-- IMPORTANT: parent to a container that actually renders a ScreenGui. Never nest
+		-- inside another ScreenGui (e.g. HiddenGui) — that silently renders nothing.
 		local guiparent
-		pcall(function() guiparent = gethiddengui and gethiddengui() end)
-		if not guiparent then guiparent = HiddenGui end
+		pcall(function() guiparent = gethui() end)
 		if not guiparent then pcall(function() guiparent = cloneref(game:GetService("CoreGui")) end) end
+		if not guiparent then guiparent = Player:FindFirstChildOfClass("PlayerGui") end
 		JoyGui.Parent = guiparent
 		-- Build the two aim joysticks (left-arm on the left, right-arm on the right).
 		LeftJoy = MakeJoy(0, 100)
