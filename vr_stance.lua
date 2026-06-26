@@ -16,7 +16,15 @@ local RunService = cloneref(game:GetService("RunService"))
 local TweenService = cloneref(game:GetService("TweenService"))
 local Players = cloneref(game:GetService("Players"))
 local UserInputService = cloneref(game:GetService("UserInputService"))
+local StarterGui = cloneref(game:GetService("StarterGui"))
 local Player = Players.LocalPlayer
+
+-- [DEBUG] temporary on-screen notify to diagnose the joysticks
+local function DbgNotify(text)
+	pcall(function()
+		StarterGui:SetCore("SendNotification", { Title = "VRStance", Text = tostring(text), Duration = 4 })
+	end)
+end
 
 AddModule(function()
 	local VRService = cloneref(game:GetService("VRService"))
@@ -30,6 +38,7 @@ AddModule(function()
 	m.Config = function(parent: GuiBase2d)
 		Util_CreateSwitch(parent, "Proper Arm Control (joysticks)", ProperArms).Changed:Connect(function(v)
 			ProperArms = v
+			DbgNotify("ProperArms = " .. tostring(v))
 		end)
 	end
 
@@ -180,17 +189,12 @@ AddModule(function()
 		-- which avoids the legs flipping/twisting (esp. while crouched with a leaning
 		-- back). Pole points straight down + slightly forward so knees bend forward,
 		-- not behind. Walking falls through to the original stepping logic below.
-		if hum.MoveDirection.Magnitude < 0.1 then
+		if StanceUpright and not Crouching and hum.MoveDirection.Magnitude < 0.1 then
 			local orig = torso.CFrame * (leg.Offset * scale)
-			local foot
-			if Crouching then
-				-- crouched idle: feet hang DOWN and slightly forward (legs angled like the
-				-- regular standing idle, not stuck straight out — that looked like sitting).
-				foot = orig + root.CFrame.LookVector * (0.85 * scale) - Vector3.new(0, 1.45 * scale, 0)
-			elseif StanceUpright then
-				-- upright stance: feet straight down under the hips (legs straight, taller)
-				foot = orig - Vector3.new(0, 1.9 * scale, 0)
-			end
+			-- upright stance: feet straight down under the hips (legs straight, taller).
+			-- Crouch is intentionally NOT handled here — it uses the normal stepping
+			-- legs (standing animation), just lowered by the crouch.
+			local foot = orig - Vector3.new(0, 1.9 * scale, 0)
 			if foot then
 				leg.Position, leg.Target, leg.InAir = foot, foot, false
 				leg.Timer = leg.Timer % 1
@@ -301,10 +305,10 @@ AddModule(function()
 		base.AnchorPoint = Vector2.new(0.5, 0.5)
 		base.Position = UDim2.new(sideScale, sideOff, 0.62, 0)
 		base.Size = UDim2.fromOffset(120, 120)
-		base.BackgroundColor3 = Color3.new(0, 0, 0)
-		base.BackgroundTransparency = 0.55
+		base.BackgroundColor3 = Color3.new(1, 0, 0) -- [DEBUG] bright red to confirm it renders
+		base.BackgroundTransparency = 0.2
 		base.BorderSizePixel = 0
-		base.Visible = false
+		base.Visible = true -- [DEBUG] start visible
 		base.Active = true -- sink input so dragging the stick doesn't pan camera/move
 		base.ZIndex = 2
 		base.Parent = JoyGui
@@ -491,6 +495,7 @@ AddModule(function()
 		RightJoy = MakeJoy(1, -100)
 		WireJoy(LeftJoy)
 		WireJoy(RightJoy)
+		DbgNotify("joysticks built, parent=" .. tostring(JoyGui.Parent and JoyGui.Parent.ClassName or "NIL"))
 	end
 	m.Update = function(dt: number, figure: Model)
 		local t = os.clock()
@@ -498,9 +503,9 @@ AddModule(function()
 		isdancing = not not figure:GetAttribute("IsDancing")
 		rcp.FilterDescendantsInstances = {figure, Player.Character}
 
-		-- [ARMS] Show the aim joysticks only while proper arm control is enabled.
-		if LeftJoy then LeftJoy.Base.Visible = ProperArms and not isdancing end
-		if RightJoy then RightJoy.Base.Visible = ProperArms and not isdancing end
+		-- [DEBUG] force the joysticks visible regardless of the toggle, to test rendering.
+		if LeftJoy then LeftJoy.Base.Visible = not isdancing end
+		if RightJoy then RightJoy.Base.Visible = not isdancing end
 
 		-- get vii
 		hum = figure:FindFirstChild("Humanoid")
@@ -543,7 +548,9 @@ AddModule(function()
 			local vro = root.CFrame * CFrame.new(0, 1.5 * scale, 0)
 			local vroot = root.CFrame
 			vro += Vector3.new(0, CrouchDistance * scale, 0)
-			vroot += Vector3.new(0, CrouchDistance * scale, 0)
+			-- [CROUCH] (removed `vroot += CrouchDistance`) keeping the torso bottom down
+			-- with the rest lowers the whole torso vertically instead of bending/tilting
+			-- it, so crouch reads like the standing pose, just lower.
 			if VRService.VREnabled then
 				chead, clarm, crarm = VRService:GetUserCFrame(Enum.UserCFrame.Head), VRService:GetUserCFrame(Enum.UserCFrame.LeftHand), VRService:GetUserCFrame(Enum.UserCFrame.RightHand)
 				if ReanimCamera:IsFirstPerson() then
