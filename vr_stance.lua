@@ -275,7 +275,10 @@ AddModule(function()
 			local planar = cam.RightVector * sx + cam.UpVector * sy
 			if planar.Magnitude > 1e-4 then planar = planar.Unit else planar = cam.LookVector end
 			local a = r * (math.pi / 2) -- 0 at centre (forward) -> 90deg at edge (pure axis)
-			cast = (cam.LookVector * math.cos(a) + planar * math.sin(a)).Unit
+			-- forward = AWAY from the camera (into the screen). Negate only the LookVector
+			-- term so centre points the arm away, not back at the camera; left/right/up/down
+			-- (the planar term) are left as-is so they don't flip.
+			cast = (-cam.LookVector * math.cos(a) + planar * math.sin(a)).Unit
 			if js.Held then
 				-- FULLY joystick-controlled: the arm points exactly along the stick and
 				-- nothing else instructs it — no rest-pose blend, no random wobble.
