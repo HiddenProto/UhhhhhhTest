@@ -7446,7 +7446,7 @@ do
 	end)
 	local NetVelSlider = UI.CreateSlider(MainPage, "Netless Velocity", Reanimate.NetlessVelocity, 25.01, 1000, 0.1)
 	NetVelSlider.Changed:Connect(function(val)
-		val = math.clamp(val, 25.01, 30)
+		val = math.clamp(val, 25.01, 1000)
 		NetVelSlider.Value = val
 		Reanimate.NetlessVelocity = val
 		SaveData.NetlessVelocity = val
