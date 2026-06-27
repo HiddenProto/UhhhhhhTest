@@ -5967,6 +5967,28 @@ function HatReanimator.Start()
 		elseif v:IsA("Accessory") and v.Parent == Player.Character then
 			local handle = v:WaitForChild("Handle", 10)
 			if handle then
+				-- [ACCESSORY DETACH] if this accessory was refreshed/re-added AFTER the
+				-- character already died, reclone its attachments too so it doesn't stay
+				-- stuck on a limb. Only when dead (the live initial batch is handled at
+				-- the detach point) and only if the option is on.
+				if SaveData.Reanimator.RecloneHatAttach and handle:IsA("BasePart") then
+					local hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
+					if hum and (hum.Health <= 0 or hum:GetState() == Enum.HumanoidStateType.Dead) then
+						for _, child in handle:GetChildren() do
+							if child:IsA("Weld") or child:IsA("WeldConstraint") or child:IsA("Motor6D") then
+								pcall(function() child:Destroy() end)
+							end
+						end
+						for _, child in handle:GetChildren() do
+							if child:IsA("Attachment") then
+								child.Archivable = true
+								local clone = child:Clone()
+								pcall(function() child:Destroy() end)
+								clone.Parent = handle
+							end
+						end
+					end
+				end
 				if not table.find(CharHats, v) then
 					table.insert(CharHats, v)
 					local conn = nil
