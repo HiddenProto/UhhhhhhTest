@@ -30,6 +30,8 @@ AddModule(function()
 	m.Config = function(parent: GuiBase2d)
 		Util_CreateSwitch(parent, "Proper Arm Control (joysticks)", ProperArms).Changed:Connect(function(v)
 			ProperArms = v
+			if LeftJoy then LeftJoy.Base.Visible = v end
+			if RightJoy then RightJoy.Base.Visible = v end
 		end)
 	end
 
