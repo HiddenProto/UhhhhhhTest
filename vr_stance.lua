@@ -264,21 +264,17 @@ AddModule(function()
 		local cast
 		local pointing
 		if ProperArms and js then
-			-- [ARMS] Joystick aim in pure camera screen-space (hemisphere mapping):
-			-- centre = forward (into the screen); pushing the stick to the EDGE points
-			-- the arm at the exact camera axis — full left = screen-left, full up =
-			-- screen-up, etc., regardless of which way the camera faces.
+			-- [ARMS] Joystick aim in camera screen-space, expressed in the ARM's own frame
+			-- (headcf — the same frame the original look-aim uses) so directions come out
+			-- right: centre = forward/away (into the screen), edge = the pure screen axis
+			-- (full left = screen-left, full up = screen-up, etc.).
 			pointing = js.Held
-			local cam = ReanimCamera.CFrame
 			local sx, sy = js.Vec.X, js.Vec.Y
 			local r = math.min(1, math.sqrt(sx * sx + sy * sy))
-			local planar = cam.RightVector * sx + cam.UpVector * sy
-			if planar.Magnitude > 1e-4 then planar = planar.Unit else planar = cam.LookVector end
+			local planar = headcf.RightVector * sx + headcf.UpVector * sy
+			if planar.Magnitude > 1e-4 then planar = planar.Unit else planar = headcf.LookVector end
 			local a = r * (math.pi / 2) -- 0 at centre (forward) -> 90deg at edge (pure axis)
-			-- forward = AWAY from the camera (into the screen). Negate only the LookVector
-			-- term so centre points the arm away, not back at the camera; left/right/up/down
-			-- (the planar term) are left as-is so they don't flip.
-			cast = (-cam.LookVector * math.cos(a) + planar * math.sin(a)).Unit
+			cast = (headcf.LookVector * math.cos(a) + planar * math.sin(a)).Unit
 			if js.Held then
 				-- FULLY joystick-controlled: the arm points exactly along the stick and
 				-- nothing else instructs it — no rest-pose blend, no random wobble.
