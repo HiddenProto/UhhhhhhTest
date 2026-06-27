@@ -37,7 +37,8 @@ AddModule(function()
 
 	-- [ARMS] These MUST be declared before m.Config — it (and Update) share them.
 	local ProperArms = false -- false = M1/M2 point, true = on-screen joysticks aim the arms
-	local LeftJoy, RightJoy -- joystick objects {Base,Knob,Held,Vec,Input}
+	local JoyLock = false -- when true, a released stick stays where you left it (arm holds aim)
+	local LeftJoy, RightJoy -- joystick objects {Base,Knob,Held,Vec,Input,Locked}
 	local JoyGui -- dedicated always-on-top ScreenGui that holds the joysticks
 	local JoyConns = {}
 	local EnsureJoysticks -- forward-declared; defined after MakeJoy/WireJoy
@@ -268,7 +269,7 @@ AddModule(function()
 			-- (headcf — the same frame the original look-aim uses) so directions come out
 			-- right: centre = forward/away (into the screen), edge = the pure screen axis
 			-- (full left = screen-left, full up = screen-up, etc.).
-			pointing = js.Held
+			pointing = js.Held or js.Locked
 			-- Take the camera's WORLD axes into the arm's frame (vro). This rotates
 			-- smoothly and never mirrors like headcf does past 90deg of turn, so forward
 			-- stays "away from camera" no matter how much you turn.
@@ -282,7 +283,7 @@ AddModule(function()
 			if planar.Magnitude > 1e-4 then planar = planar.Unit else planar = fwd end
 			local a = r * (math.pi / 2) -- 0 at centre (forward) -> 90deg at edge (pure axis)
 			cast = (fwd * math.cos(a) + planar * math.sin(a)).Unit
-			if js.Held then
+			if js.Held or js.Locked then
 				-- FULLY joystick-controlled: the arm points exactly along the stick and
 				-- nothing else instructs it — no rest-pose blend, no random wobble.
 				arm.Timer = 1
@@ -354,13 +355,14 @@ AddModule(function()
 		kst.Color = Color3.new(1, 1, 1)
 		kst.Thickness = 2
 		kst.Transparency = 0.25
-		return { Base = base, Knob = knob, Held = false, Vec = Vector2.zero, Input = nil }
+		return { Base = base, Knob = knob, Held = false, Vec = Vector2.zero, Input = nil, Locked = false }
 	end
 	local function WireJoy(js)
 		table.insert(JoyConns, js.Base.InputBegan:Connect(function(input)
 			if not js.Base.Visible then return end
 			if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
 				js.Held = true
+				js.Locked = false -- grabbing again clears any locked hold
 				js.Input = input
 				UpdateJoy(js, input.Position)
 			end
@@ -375,8 +377,14 @@ AddModule(function()
 			if js.Held and js.Input and (input == js.Input or input.UserInputType == js.Input.UserInputType) then
 				js.Held = false
 				js.Input = nil
-				js.Vec = Vector2.zero
-				js.Knob.Position = UDim2.fromScale(0.5, 0.5)
+				if JoyLock then
+					-- lock on: keep the stick where it was so the arm holds that aim
+					js.Locked = true
+				else
+					js.Locked = false
+					js.Vec = Vector2.zero
+					js.Knob.Position = UDim2.fromScale(0.5, 0.5)
+				end
 			end
 		end))
 	end
@@ -401,7 +409,45 @@ AddModule(function()
 		RightJoy = MakeJoy(1, -90)
 		WireJoy(LeftJoy)
 		WireJoy(RightJoy)
-		Notify("Joysticks CREATED, parent=" .. tostring(JoyGui.Parent and JoyGui.Parent.ClassName or "NIL"))
+		-- small LOCK toggle (bottom-centre): when ON, a released stick holds its position
+		-- so the arm stays aimed without you holding it.
+		local lockBtn = Instance.new("TextButton")
+		lockBtn.Name = "Uhhhhhh_JoyLock"
+		lockBtn.AnchorPoint = Vector2.new(0.5, 0.5)
+		lockBtn.Position = UDim2.new(0.5, 0, 1, -55)
+		lockBtn.Size = UDim2.fromOffset(96, 34)
+		lockBtn.BackgroundColor3 = Color3.new(0, 0, 0)
+		lockBtn.BackgroundTransparency = 0.5
+		lockBtn.BorderSizePixel = 0
+		lockBtn.AutoButtonColor = true
+		lockBtn.Font = Enum.Font.Code
+		lockBtn.TextSize = 16
+		lockBtn.TextColor3 = Color3.new(1, 1, 1)
+		lockBtn.ZIndex = 2
+		lockBtn.Parent = JoyGui
+		Instance.new("UICorner", lockBtn).CornerRadius = UDim.new(0, 6)
+		local lst = Instance.new("UIStroke", lockBtn)
+		lst.Thickness = 2
+		lst.Transparency = 0.3
+		local function refreshLock()
+			lockBtn.Text = "LOCK: " .. (JoyLock and "ON" or "OFF")
+			lst.Color = JoyLock and Color3.new(0.3, 1, 0.4) or Color3.new(1, 1, 1)
+		end
+		refreshLock()
+		table.insert(JoyConns, lockBtn.Activated:Connect(function()
+			JoyLock = not JoyLock
+			if not JoyLock then
+				-- turning lock off releases any held aim back to rest
+				for _, j in {LeftJoy, RightJoy} do
+					if j and not j.Held then
+						j.Locked = false
+						j.Vec = Vector2.zero
+						j.Knob.Position = UDim2.fromScale(0.5, 0.5)
+					end
+				end
+			end
+			refreshLock()
+		end))
 	end
 	m.Init = function(figure: Model)
 		hum = figure:FindFirstChild("Humanoid")
