@@ -6365,11 +6365,11 @@ function HatReanimator.Start()
 		end,
 	}
 	local NumHats = 0
-	-- [FAST REANIM] shrink the reanim's internal hat-collide delays. Not one frame —
-	-- that's too fast for the kill/detach to replicate, so accessories sometimes don't
-	-- get grabbed. A small floor keeps it much faster than default but still reliable.
+	-- [FAST REANIM] fixed ~0.1s total: the two main detach waits become 0.05 each.
+	-- Not one frame — the kill/detach needs a moment to replicate or accessories
+	-- aren't grabbed. (Real char parts are already noclipped by the LimbReanimator.)
 	local function fastwait(t)
-		if SaveData.Reanimator.FastReanim then return task.wait(math.min(t, 0.06)) end
+		if SaveData.Reanimator.FastReanim then return task.wait(0.05) end
 		return task.wait(t)
 	end
 	local function OnCharacter(character)
