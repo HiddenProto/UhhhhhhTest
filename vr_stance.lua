@@ -594,8 +594,13 @@ AddModule(function()
 			crarm += crarm.Position * (scale - 1)
 			local armo = CFrame.Angles(1.57, 0, 0) * CFrame.new(0, 0, 0)
 			SetCFrame(head, vro * chead)
-			SetCFrame(larm, vro * clarm * armo)
-			SetCFrame(rarm, vro * crarm * armo)
+			-- [ARMS] With proper arm control on, only drive an arm while its joystick is
+			-- held. Released -> leave that arm alone (no IK) so it doesn't interfere with
+			-- other actions. (Full VR with real hands still always drives them.)
+			local leftFree = ProperArms and LeftJoy and not LeftJoy.Held and not VRService.VREnabled
+			local rightFree = ProperArms and RightJoy and not RightJoy.Held and not VRService.VREnabled
+			if not leftFree then SetCFrame(larm, vro * clarm * armo) end
+			if not rightFree then SetCFrame(rarm, vro * crarm * armo) end
 			local z1, z2 = vroot:PointToObjectSpace(GetLegPoint(LegsTarget[1])).Z, vroot:PointToObjectSpace(GetLegPoint(LegsTarget[2])).Z
 			local yabai = CFrame.Angles(0, math.atan(z1 - z2) * 0.5 / scale, 0)
 			TorsoRotation = yabai:Lerp(TorsoRotation, math.exp(-4 * dt))
