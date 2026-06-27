@@ -8178,7 +8178,7 @@ do
 		local t = 0
 		RunService.Heartbeat:Connect(function(dt)
 			t += dt
-			if t >= 0.5 then
+			if t >= 0.2 then
 				t = 0
 				pcall(ApplyAvatarConfigs)
 			end
