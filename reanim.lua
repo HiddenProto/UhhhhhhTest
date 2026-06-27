@@ -5151,6 +5151,12 @@ function HatReanimator.Config(parent)
 		HatReanimator.RebuildRequired = true
 	end)
 	UI.CreateText(parent, "^^^ if ur rig built wrong or u switched to a new rig ^^^\nthis button is for you", 10, Enum.TextXAlignment.Center)
+	local DropBtn, DropBtnText = UI.CreateButton(parent, "Drop Accessories", 20)
+	DropBtn.Activated:Connect(function()
+		HatReanimator.Dropped = not HatReanimator.Dropped
+		DropBtnText.Text = HatReanimator.Dropped and "Pick Up Accessories" or "Drop Accessories"
+	end)
+	UI.CreateText(parent, "drop accessories in place w/ collision (they stay across respawns); click again to pull them back", 10, Enum.TextXAlignment.Center)
 	UI.CreateButton(parent, "Respawn", 20).Activated:Connect(function()
 		--HatReanimator.Status.Permadeath = "Fired CDSB Signal!"
 	end)
@@ -7010,6 +7016,12 @@ function HatReanimator.Start()
 				for _,hat in CharHats do
 					local handle = hat:FindFirstChild("Handle")
 					if handle and handle:IsA("BasePart") then
+						if HatReanimator.Dropped then
+							-- [DROP] leave the accessory where it is + give collision (no rig pull)
+							handle.CanCollide = true
+							handle.LocalTransparencyModifier = 0
+							continue
+						end
 						handle.CanCollide = false
 						local lltm = ltm
 						if Reanimate.FirstPersonBody then
@@ -7065,6 +7077,7 @@ function HatReanimator.Start()
 		for _,ref in HatRefs do
 			local ph = ref.PH
 			if ph then
+				if HatReanimator.Dropped then ph.Transparency = 1 continue end -- [DROP] hide placeholder
 				if ReanimOkay and ref.Hat and ref.Aligned then
 					ph.Transparency = 1
 				else
@@ -7092,6 +7105,7 @@ function HatReanimator.Start()
 		for _,ref in HatRefs do
 			local ph = ref.PH
 			if ph then
+				if HatReanimator.Dropped then ph.Transparency = 1 continue end -- [DROP] hide placeholder
 				if ReanimOkay and ref.Hat and ref.Aligned then else
 					local tcf, _ = GetHatMappedCFrame(GetHatMappedOverride(ref.Map))
 					if tcf then
@@ -7109,6 +7123,7 @@ function HatReanimator.Start()
 		end
 		debug.profileend()
 	end
+	HatReanimator.Dropped = false -- [DROP] deanimating clears the dropped state
 	ResetHatRefs()
 	for _,v in HatRefs do if v.PH then v.PH:Destroy() end end
 	CharConn:Disconnect()
