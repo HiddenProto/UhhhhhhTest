@@ -5260,7 +5260,10 @@ function HatReanimator.Start()
 			end
 			-- dont map explicitly overriden hats
 			for _,data in HatReanimator.HatCFrameOverride do
-				if data.MeshId and data.TextureId then
+				-- [ACCESSORY PRESETS] our entries are ADDITIVE offsets (Compose), not full
+				-- overrides — skip them here so the hat still gets its proper limb mapping
+				-- and our offset composes onto the correct base.
+				if not data.Compose and data.MeshId and data.TextureId then
 					if AssetIdMatch(mesh, data.MeshId) and AssetIdMatch(tex, data.TextureId) then
 						return mapdata, "Unknown", 4
 					end
