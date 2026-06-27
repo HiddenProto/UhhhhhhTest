@@ -5061,6 +5061,10 @@ function HatReanimator.Config(parent)
 		HatReanimator.Permadeath = val
 		SaveData.Reanimator.HatsPatchmahub = not val
 	end)
+	UI.CreateSwitch(parent, "Detach via BreakJoints (alt)", SaveData.Reanimator.UseBreakJoints).Changed:Connect(function(val)
+		SaveData.Reanimator.UseBreakJoints = val
+	end)
+	UI.CreateText(parent, "alt detach: client BreakJoints + drop accessory welds, instead of ServerBreakJoints", 10, Enum.TextXAlignment.Center)
 	UI.CreateDropdown(parent, "respawntp", {
 		"The Void",
 		"Behind ReanimCharacter",
@@ -6354,6 +6358,28 @@ function HatReanimator.Start()
 		end,
 	}
 	local NumHats = 0
+	-- [BREAKJOINTS] Alternative detach method: client BreakJoints + drop accessory
+	-- welds/motors. Swappable with the default ServerBreakJoints via the
+	-- "Detach via BreakJoints" switch (SaveData.Reanimator.UseBreakJoints).
+	local function BreakDeJoints(char, withAccessories)
+		if not char then return end
+		pcall(function() char:BreakJoints() end)
+		if withAccessories then
+			for _, obj in char:GetDescendants() do
+				if obj:IsA("Accessory") then
+					local handle = obj:FindFirstChild("Handle")
+					if handle and handle:IsA("BasePart") then
+						pcall(function() handle:BreakJoints() end)
+						for _, child in handle:GetChildren() do
+							if child:IsA("Weld") or child:IsA("WeldConstraint") or child:IsA("Motor6D") then
+								child:Destroy()
+							end
+						end
+					end
+				end
+			end
+		end
+	end
 	local function OnCharacter(character)
 		if HatReanimator.DontFireCharAddOnThisChar == character then return end
 		currentping = Player:GetNetworkPing()
@@ -6610,7 +6636,11 @@ function HatReanimator.Start()
 			return
 		end
 		AvatarEditorService:BustAvatarFetchCache()
-		pcall(replicatesignal, Humanoid.ServerBreakJoints)
+		if SaveData.Reanimator.UseBreakJoints then
+			BreakDeJoints(character, true)
+		else
+			pcall(replicatesignal, Humanoid.ServerBreakJoints)
+		end
 		Humanoid.EvaluateStateMachine = true
 		Humanoid.BreakJointsOnDeath = true
 		Humanoid.Health = 0
@@ -6701,7 +6731,11 @@ function HatReanimator.Start()
 			InitCFrame = h.RootPart.CFrame
 			pcall(function() Player.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Dead) end)
 			pcall(function() Player.Character.Humanoid.Health = 0 end)
-			pcall(replicatesignal, Player.Character.Humanoid.ServerBreakJoints)
+			if SaveData.Reanimator.UseBreakJoints then
+				BreakDeJoints(Player.Character, true)
+			else
+				pcall(replicatesignal, Player.Character.Humanoid.ServerBreakJoints)
+			end
 			--pcall(replicatesignal, Player.ConnectDiedSignalBackend)
 			Player.Character.DescendantAdded:Connect(CharOnDesc)
 			for _,v in Player.Character:GetDescendants() do
