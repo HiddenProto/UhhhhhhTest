@@ -7027,7 +7027,15 @@ function HatReanimator.Start()
 						if HatReanimator.Dropped then
 							-- [DROP] spawn an invisible physics ghost clone at the accessory's spot;
 							-- it falls with collision and the real accessory follows it like the rig.
-							local ghost = AccGhosts[handle]
+							-- key the ghost by accessory identity (name+mesh) so it survives a rig
+							-- reload: the new handle re-finds the same ghost instead of respawning one.
+							local gmesh = ""
+							if handle:IsA("MeshPart") then gmesh = handle.MeshId else
+								local sm = handle:FindFirstChildOfClass("SpecialMesh")
+								if sm then gmesh = sm.MeshId end
+							end
+							local gkey = hat.Name .. "|" .. gmesh
+							local ghost = AccGhosts[gkey]
 							if not ghost or not ghost.Parent then
 								ghost = handle:Clone()
 								for _,c in ghost:GetChildren() do
@@ -7047,7 +7055,7 @@ function HatReanimator.Start()
 								ghost.CFrame = handle.CFrame
 								ghost.AssemblyLinearVelocity = Vector3.zero
 								ghost.Parent = workspace
-								AccGhosts[handle] = ghost
+								AccGhosts[gkey] = ghost
 							end
 							handle.CanCollide = false
 							handle.LocalTransparencyModifier = 0
