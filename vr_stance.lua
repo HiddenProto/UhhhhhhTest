@@ -172,6 +172,7 @@ AddModule(function()
 	local StanceLift = 0 -- [STANCE] smooth body lift while upright idle so feet aren't in the ground
 	local CrouchDistance = 0
 	local TorsoRotation = CFrame.identity
+	local V2Turn = CFrame.identity -- smoothed V2 look-turn (shared by torso + arm anchors)
 
 	local CROUCH_DISTANCE = 1.25
 	local LEG_TWEEN_TIME = 0.25
@@ -656,12 +657,17 @@ AddModule(function()
 			crarm += crarm.Position * (scale - 1)
 			local armo = CFrame.Angles(1.57, 0, 0) * CFrame.new(0, 0, 0)
 			-- [V2] turn toward where the camera looks, applied to the torso AND the arm
-			-- anchors (around the neck) so the shoulders drag along with the torso.
-			local turnCF = CFrame.identity
+			-- anchors (pivoting at the neck) so the shoulders drag along with the torso.
+			-- Use the camera's look vector in the body frame (continuous, no Euler wrap =
+			-- no flip) and smooth it so the motion is gradual.
+			local targetTurn = CFrame.identity
 			if TorsoV2 then
-				local tx, ty = root.CFrame.Rotation:ToObjectSpace(ReanimCamera.CFrame.Rotation):ToEulerAngles(Enum.RotationOrder.YXZ)
-				turnCF = CFrame.Angles(tx * 0.25, ty * 0.3, 0)
+				local cf = root.CFrame:VectorToObjectSpace(ReanimCamera.CFrame.LookVector)
+				-- cf.X = looking right/left, cf.Y = looking up/down (both smooth in [-1,1])
+				targetTurn = CFrame.Angles(cf.Y * 0.35, -cf.X * 0.45, 0)
 			end
+			V2Turn = V2Turn:Lerp(targetTurn, 1 - math.exp(-12 * dt))
+			local turnCF = V2Turn
 			SetCFrame(head, vro * chead)
 			-- Arms are always driven (so they never fall). With proper arm control on,
 			-- ProcessArms reads OUR joystick instead of the VR script's default movement:
