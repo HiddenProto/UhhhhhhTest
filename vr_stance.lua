@@ -360,6 +360,28 @@ AddModule(function()
 			end
 		end))
 	end
+	-- [ARMS] Build the joysticks on demand. Called from Update (which runs whenever
+	-- the moveset is active) so they exist regardless of whether/when Init ran.
+	local function EnsureJoysticks()
+		if JoyGui and JoyGui.Parent then return end
+		JoyGui = Instance.new("ScreenGui")
+		JoyGui.Name = "Uhhhhhh_ArmJoysticks"
+		JoyGui.ResetOnSpawn = false
+		JoyGui.IgnoreGuiInset = true
+		JoyGui.DisplayOrder = 100000
+		JoyGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+		JoyGui.Enabled = true
+		-- parent to a container that actually renders a ScreenGui (never nest in another).
+		local guiparent
+		pcall(function() guiparent = gethui() end)
+		if not guiparent then pcall(function() guiparent = cloneref(game:GetService("CoreGui")) end) end
+		if not guiparent then guiparent = Player:FindFirstChildOfClass("PlayerGui") end
+		JoyGui.Parent = guiparent
+		LeftJoy = MakeJoy(0, 90)
+		RightJoy = MakeJoy(1, -90)
+		WireJoy(LeftJoy)
+		WireJoy(RightJoy)
+	end
 	m.Init = function(figure: Model)
 		hum = figure:FindFirstChild("Humanoid")
 		root = figure:FindFirstChild("HumanoidRootPart")
@@ -481,27 +503,6 @@ AddModule(function()
 		end, true, Enum.KeyCode.F)
 		ContextActions:SetTitle("Uhhhhhh_VRStance", "Stance")
 		ContextActions:SetPosition("Uhhhhhh_VRStance", UDim2.new(1, -230, 1, -230))
-		-- [ARMS] Dedicated always-on-top ScreenGui for the joysticks (so they aren't
-		-- hidden behind the menu and don't depend on the main GUI's z-order).
-		JoyGui = Instance.new("ScreenGui")
-		JoyGui.Name = "Uhhhhhh_ArmJoysticks"
-		JoyGui.ResetOnSpawn = false
-		JoyGui.IgnoreGuiInset = true
-		JoyGui.DisplayOrder = 100000
-		JoyGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-		JoyGui.Enabled = true
-		-- IMPORTANT: parent to a container that actually renders a ScreenGui. Never nest
-		-- inside another ScreenGui (e.g. HiddenGui) — that silently renders nothing.
-		local guiparent
-		pcall(function() guiparent = gethui() end)
-		if not guiparent then pcall(function() guiparent = cloneref(game:GetService("CoreGui")) end) end
-		if not guiparent then guiparent = Player:FindFirstChildOfClass("PlayerGui") end
-		JoyGui.Parent = guiparent
-		-- Build the two aim joysticks (left-arm on the left, right-arm on the right).
-		LeftJoy = MakeJoy(0, 90)
-		RightJoy = MakeJoy(1, -90)
-		WireJoy(LeftJoy)
-		WireJoy(RightJoy)
 		Notify("Equipped (build " .. VRSTANCE_BUILD .. "). Toggle 'Proper Arm Control' to show joysticks.")
 	end
 	m.Update = function(dt: number, figure: Model)
@@ -510,7 +511,9 @@ AddModule(function()
 		isdancing = not not figure:GetAttribute("IsDancing")
 		rcp.FilterDescendantsInstances = {figure, Player.Character}
 
-		-- Show the aim joysticks only while proper arm control is enabled.
+		-- Create the joysticks on demand (the moveset is active here), then show them
+		-- only while proper arm control is enabled.
+		if ProperArms and not isdancing then EnsureJoysticks() end
 		if LeftJoy then LeftJoy.Base.Visible = ProperArms and not isdancing end
 		if RightJoy then RightJoy.Base.Visible = ProperArms and not isdancing end
 
