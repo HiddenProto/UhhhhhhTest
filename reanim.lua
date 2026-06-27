@@ -6365,9 +6365,11 @@ function HatReanimator.Start()
 		end,
 	}
 	local NumHats = 0
-	-- [FAST REANIM] collapse the reanim's internal hat-collide delays to one frame.
+	-- [FAST REANIM] shrink the reanim's internal hat-collide delays. Not one frame —
+	-- that's too fast for the kill/detach to replicate, so accessories sometimes don't
+	-- get grabbed. A small floor keeps it much faster than default but still reliable.
 	local function fastwait(t)
-		if SaveData.Reanimator.FastReanim then return task.wait() end
+		if SaveData.Reanimator.FastReanim then return task.wait(math.min(t, 0.06)) end
 		return task.wait(t)
 	end
 	local function OnCharacter(character)
