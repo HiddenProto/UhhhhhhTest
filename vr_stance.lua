@@ -655,21 +655,22 @@ AddModule(function()
 			clarm += clarm.Position * (scale - 1)
 			crarm += crarm.Position * (scale - 1)
 			local armo = CFrame.Angles(1.57, 0, 0) * CFrame.new(0, 0, 0)
-			SetCFrame(head, vro * chead)
-			-- Arms are always driven (so they never fall). With proper arm control on,
-			-- ProcessArms reads OUR joystick instead of the VR script's default movement:
-			-- held -> point along the stick, released -> rest (down).
-			SetCFrame(larm, vro * clarm * armo)
-			SetCFrame(rarm, vro * crarm * armo)
-			local z1, z2 = vroot:PointToObjectSpace(GetLegPoint(LegsTarget[1])).Z, vroot:PointToObjectSpace(GetLegPoint(LegsTarget[2])).Z
-			local yabai = CFrame.Angles(0, math.atan(z1 - z2) * 0.5 / scale, 0)
-			TorsoRotation = yabai:Lerp(TorsoRotation, math.exp(-4 * dt))
-			-- [V2] turn the torso slightly toward where the camera looks (yaw + pitch).
+			-- [V2] turn toward where the camera looks, applied to the torso AND the arm
+			-- anchors (around the neck) so the shoulders drag along with the torso.
 			local turnCF = CFrame.identity
 			if TorsoV2 then
 				local tx, ty = root.CFrame.Rotation:ToObjectSpace(ReanimCamera.CFrame.Rotation):ToEulerAngles(Enum.RotationOrder.YXZ)
 				turnCF = CFrame.Angles(tx * 0.25, ty * 0.3, 0)
 			end
+			SetCFrame(head, vro * chead)
+			-- Arms are always driven (so they never fall). With proper arm control on,
+			-- ProcessArms reads OUR joystick instead of the VR script's default movement:
+			-- held -> point along the stick, released -> rest (down).
+			SetCFrame(larm, vro * turnCF * clarm * armo)
+			SetCFrame(rarm, vro * turnCF * crarm * armo)
+			local z1, z2 = vroot:PointToObjectSpace(GetLegPoint(LegsTarget[1])).Z, vroot:PointToObjectSpace(GetLegPoint(LegsTarget[2])).Z
+			local yabai = CFrame.Angles(0, math.atan(z1 - z2) * 0.5 / scale, 0)
+			TorsoRotation = yabai:Lerp(TorsoRotation, math.exp(-4 * dt))
 			SetCFrame(torso, IK2Bone(
 				vroot * Vector3.new(0, -3 * scale, 0),
 				vro * chead * Vector3.new(0, -0.5 * scale, 0),
