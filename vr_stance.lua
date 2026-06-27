@@ -304,20 +304,25 @@ AddModule(function()
 		base.ZIndex = 2
 		base.Parent = JoyGui
 		Instance.new("UICorner", base).CornerRadius = UDim.new(1, 0)
+		-- transparent fill, but a clearly visible outline ring so it's findable on dark scenes
 		local st = Instance.new("UIStroke", base)
 		st.Color = Color3.new(1, 1, 1)
-		st.Thickness = 1.5
-		st.Transparency = 0.7
+		st.Thickness = 3
+		st.Transparency = 0.1
 		local knob = Instance.new("Frame")
 		knob.AnchorPoint = Vector2.new(0.5, 0.5)
 		knob.Position = UDim2.fromScale(0.5, 0.5)
 		knob.Size = UDim2.fromOffset(66, 66)
 		knob.BackgroundColor3 = Color3.new(0.5, 0.5, 0.5) -- gray, transparent
-		knob.BackgroundTransparency = 0.5
+		knob.BackgroundTransparency = 0.4
 		knob.BorderSizePixel = 0
 		knob.ZIndex = 3
 		knob.Parent = base
 		Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+		local kst = Instance.new("UIStroke", knob)
+		kst.Color = Color3.new(1, 1, 1)
+		kst.Thickness = 2
+		kst.Transparency = 0.25
 		return { Base = base, Knob = knob, Held = false, Vec = Vector2.zero, Input = nil }
 	end
 	local function WireJoy(js)
