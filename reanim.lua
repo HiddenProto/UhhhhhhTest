@@ -5065,6 +5065,10 @@ function HatReanimator.Config(parent)
 		SaveData.Reanimator.RecloneHatAttach = val
 	end)
 	UI.CreateText(parent, "for games where accessories stay on limbs after death: drops accessory welds + reclones their attachments (on top of ServerBreakJoints)", 10, Enum.TextXAlignment.Center)
+	UI.CreateSwitch(parent, "Void Limbs (R15)", SaveData.Reanimator.VoidLimbsR15).Changed:Connect(function(val)
+		SaveData.Reanimator.VoidLimbsR15 = val
+	end)
+	UI.CreateText(parent, "R15 weld-keeping games: sinks the body limbs into the void to destroy them (severs welds, keeps accessories). Body uses the fake rig.", 10, Enum.TextXAlignment.Center)
 	UI.CreateDropdown(parent, "respawntp", {
 		"The Void",
 		"Behind ReanimCharacter",
@@ -6415,6 +6419,26 @@ function HatReanimator.Start()
 		-- accessories and keeps moving them with the fake rig (no stale references).
 		HatReanimator.RebuildRequired = true
 	end
+	-- [VOID LIMBS] R15 alternative for games that keep accessory welds: instead of
+	-- touching accessories, break the body limbs free and sink them below the (server)
+	-- void so the server destroys them — which severs the welds and frees the
+	-- accessories intact. The body is then represented by the fake rig.
+	local function VoidLimbs(char)
+		if not char then return end
+		local voidY = FallenPartsDestroyHeight - 50
+		for _, v in char:GetDescendants() do
+			if v:IsA("BasePart") and not v:FindFirstAncestorWhichIsA("Accessory") then
+				pcall(function()
+					v:BreakJoints()
+					v.Anchored = false
+					v.CanCollide = false
+					v.CFrame = CFrame.new(v.Position.X, voidY, v.Position.Z)
+					v.AssemblyLinearVelocity = Vector3.new(0, -500, 0)
+				end)
+			end
+		end
+		HatReanimator.RebuildRequired = true
+	end
 	local function OnCharacter(character)
 		if HatReanimator.DontFireCharAddOnThisChar == character then return end
 		currentping = Player:GetNetworkPing()
@@ -6671,7 +6695,9 @@ function HatReanimator.Start()
 			return
 		end
 		AvatarEditorService:BustAvatarFetchCache()
-		if SaveData.Reanimator.RecloneHatAttach then
+		if SaveData.Reanimator.VoidLimbsR15 then
+			VoidLimbs(character) -- sink body limbs into the void; keep accessories
+		elseif SaveData.Reanimator.RecloneHatAttach then
 			RecloneAccessoryAttachments(character) -- char:BreakJoints + accessory break (your method)
 		else
 			pcall(replicatesignal, Humanoid.ServerBreakJoints)
@@ -6766,7 +6792,9 @@ function HatReanimator.Start()
 			InitCFrame = h.RootPart.CFrame
 			pcall(function() Player.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Dead) end)
 			pcall(function() Player.Character.Humanoid.Health = 0 end)
-			if SaveData.Reanimator.RecloneHatAttach then
+			if SaveData.Reanimator.VoidLimbsR15 then
+				VoidLimbs(Player.Character) -- sink body limbs into the void; keep accessories
+			elseif SaveData.Reanimator.RecloneHatAttach then
 				RecloneAccessoryAttachments(Player.Character) -- char:BreakJoints + accessory break (your method)
 			else
 				pcall(replicatesignal, Player.Character.Humanoid.ServerBreakJoints)
