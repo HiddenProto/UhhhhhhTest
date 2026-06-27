@@ -5974,6 +5974,7 @@ function HatReanimator.Start()
 				if SaveData.Reanimator.RecloneHatAttach and handle:IsA("BasePart") then
 					local hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
 					if hum and (hum.Health <= 0 or hum:GetState() == Enum.HumanoidStateType.Dead) then
+						pcall(function() handle:BreakJoints() end)
 						for _, child in handle:GetChildren() do
 							if child:IsA("Weld") or child:IsA("WeldConstraint") or child:IsA("Motor6D") then
 								pcall(function() child:Destroy() end)
@@ -6391,6 +6392,7 @@ function HatReanimator.Start()
 			if obj:IsA("Accessory") then
 				local handle = obj:FindFirstChild("Handle")
 				if handle and handle:IsA("BasePart") then
+					pcall(function() handle:BreakJoints() end)
 					for _, child in handle:GetChildren() do
 						if child:IsA("Weld") or child:IsA("WeldConstraint") or child:IsA("Motor6D") then
 							pcall(function() child:Destroy() end)
