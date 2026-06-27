@@ -5988,6 +5988,7 @@ function HatReanimator.Start()
 								clone.Parent = handle
 							end
 						end
+						HatReanimator.RebuildRequired = true -- re-grab this accessory on fresh attachments
 					end
 				end
 				if not table.find(CharHats, v) then
@@ -6410,6 +6411,9 @@ function HatReanimator.Start()
 				end
 			end
 		end
+		-- rebuild the hat map on the fresh attachments so the reanimator re-grabs the
+		-- accessories and keeps moving them with the fake rig (no stale references).
+		HatReanimator.RebuildRequired = true
 	end
 	local function OnCharacter(character)
 		if HatReanimator.DontFireCharAddOnThisChar == character then return end
