@@ -16,15 +16,7 @@ local RunService = cloneref(game:GetService("RunService"))
 local TweenService = cloneref(game:GetService("TweenService"))
 local Players = cloneref(game:GetService("Players"))
 local UserInputService = cloneref(game:GetService("UserInputService"))
-local StarterGui = cloneref(game:GetService("StarterGui"))
 local Player = Players.LocalPlayer
-
-local VRSTANCE_BUILD = "8"
-local function Notify(text)
-	pcall(function()
-		StarterGui:SetCore("SendNotification", { Title = "VRStance b" .. VRSTANCE_BUILD, Text = tostring(text), Duration = 5 })
-	end)
-end
 
 AddModule(function()
 	local VRService = cloneref(game:GetService("VRService"))
@@ -38,7 +30,6 @@ AddModule(function()
 	m.Config = function(parent: GuiBase2d)
 		Util_CreateSwitch(parent, "Proper Arm Control (joysticks)", ProperArms).Changed:Connect(function(v)
 			ProperArms = v
-			Notify("Proper Arm Control = " .. tostring(v))
 		end)
 	end
 
@@ -305,8 +296,8 @@ AddModule(function()
 		base.AnchorPoint = Vector2.new(0.5, 0.5)
 		base.Position = UDim2.new(sideScale, sideOff, 0.62, 0)
 		base.Size = UDim2.fromOffset(150, 150)
-		base.BackgroundColor3 = Color3.new(0, 1, 0.4) -- [DIAG] bright green, will revert to transparent black
-		base.BackgroundTransparency = 0.3
+		base.BackgroundColor3 = Color3.new(0, 0, 0) -- black, very transparent (outline ring makes it findable)
+		base.BackgroundTransparency = 0.85
 		base.BorderSizePixel = 0
 		base.Visible = false
 		base.Active = true -- sink input so dragging the stick doesn't pan camera/move
@@ -336,7 +327,7 @@ AddModule(function()
 	end
 	local function WireJoy(js)
 		table.insert(JoyConns, js.Base.InputBegan:Connect(function(input)
-			if not ProperArms then return end
+			if not js.Base.Visible then return end
 			if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
 				js.Held = true
 				js.Input = input
@@ -500,7 +491,6 @@ AddModule(function()
 		RightJoy = MakeJoy(1, -90)
 		WireJoy(LeftJoy)
 		WireJoy(RightJoy)
-		Notify("Equipped. Joysticks built, parent=" .. tostring(JoyGui.Parent and JoyGui.Parent.ClassName or "NIL") .. ". (DIAG: sticks forced visible)")
 	end
 	m.Update = function(dt: number, figure: Model)
 		local t = os.clock()
@@ -508,9 +498,9 @@ AddModule(function()
 		isdancing = not not figure:GetAttribute("IsDancing")
 		rcp.FilterDescendantsInstances = {figure, Player.Character}
 
-		-- [DIAG build 8] force visible to test rendering independently of the toggle.
-		if LeftJoy then LeftJoy.Base.Visible = not isdancing end
-		if RightJoy then RightJoy.Base.Visible = not isdancing end
+		-- Show the aim joysticks only while proper arm control is enabled.
+		if LeftJoy then LeftJoy.Base.Visible = ProperArms and not isdancing end
+		if RightJoy then RightJoy.Base.Visible = ProperArms and not isdancing end
 
 		-- get vii
 		hum = figure:FindFirstChild("Humanoid")
