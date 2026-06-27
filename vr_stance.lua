@@ -264,13 +264,18 @@ AddModule(function()
 		local cast
 		local pointing
 		if ProperArms and js then
-			-- [ARMS] Joystick aim, camera-relative. Centre -> forward, the stick tilts
-			-- the aim up/down/left/right. Released -> arm falls back to its rest (down) pose.
+			-- [ARMS] Joystick aim in pure camera screen-space (hemisphere mapping):
+			-- centre = forward (into the screen); pushing the stick to the EDGE points
+			-- the arm at the exact camera axis — full left = screen-left, full up =
+			-- screen-up, etc., regardless of which way the camera faces.
 			pointing = js.Held
 			local cam = ReanimCamera.CFrame
-			local dir = cam.LookVector + cam.RightVector * (js.Vec.X * 1.3) + cam.UpVector * (js.Vec.Y * 1.3)
-			if dir.Magnitude < 1e-3 then dir = cam.LookVector end
-			cast = dir.Unit
+			local sx, sy = js.Vec.X, js.Vec.Y
+			local r = math.min(1, math.sqrt(sx * sx + sy * sy))
+			local planar = cam.RightVector * sx + cam.UpVector * sy
+			if planar.Magnitude > 1e-4 then planar = planar.Unit else planar = cam.LookVector end
+			local a = r * (math.pi / 2) -- 0 at centre (forward) -> 90deg at edge (pure axis)
+			cast = (cam.LookVector * math.cos(a) + planar * math.sin(a)).Unit
 		else
 			pointing = arm.Waving
 			cast = PhysicsRaycast(vro.Position, headcf.LookVector * 32 * scale)
