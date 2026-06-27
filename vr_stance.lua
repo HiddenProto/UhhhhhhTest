@@ -37,6 +37,7 @@ AddModule(function()
 
 	-- [ARMS] These MUST be declared before m.Config — it (and Update) share them.
 	local ProperArms = false -- false = M1/M2 point, true = on-screen joysticks aim the arms
+	local TorsoV2 = false -- V2: torso turns slightly to follow where you look
 	local JoyLock = false -- when true, a released stick stays where you left it (arm holds aim)
 	local LeftJoy, RightJoy -- joystick objects {Base,Knob,Held,Vec,Input,Locked}
 	local JoyGui -- dedicated always-on-top ScreenGui that holds the joysticks
@@ -49,6 +50,9 @@ AddModule(function()
 			if v then EnsureJoysticks() end
 			if LeftJoy then LeftJoy.Base.Visible = v end
 			if RightJoy then RightJoy.Base.Visible = v end
+		end)
+		Util_CreateSwitch(parent, "V2 (torso follows where you look)", TorsoV2).Changed:Connect(function(v)
+			TorsoV2 = v
 		end)
 	end
 
@@ -660,11 +664,17 @@ AddModule(function()
 			local z1, z2 = vroot:PointToObjectSpace(GetLegPoint(LegsTarget[1])).Z, vroot:PointToObjectSpace(GetLegPoint(LegsTarget[2])).Z
 			local yabai = CFrame.Angles(0, math.atan(z1 - z2) * 0.5 / scale, 0)
 			TorsoRotation = yabai:Lerp(TorsoRotation, math.exp(-4 * dt))
+			-- [V2] turn the torso slightly toward where the camera looks (yaw + pitch).
+			local turnCF = CFrame.identity
+			if TorsoV2 then
+				local tx, ty = root.CFrame.Rotation:ToObjectSpace(ReanimCamera.CFrame.Rotation):ToEulerAngles(Enum.RotationOrder.YXZ)
+				turnCF = CFrame.Angles(tx * 0.25, ty * 0.3, 0)
+			end
 			SetCFrame(torso, IK2Bone(
 				vroot * Vector3.new(0, -3 * scale, 0),
 				vro * chead * Vector3.new(0, -0.5 * scale, 0),
 				-vroot.LookVector, 1.5 * scale, 1.5 * scale)
-			 * CFrame.Angles(1.57, 3.14, 3.14) * CFrame.new(0, -1 * scale, 0) * TorsoRotation)
+			 * CFrame.Angles(1.57, 3.14, 3.14) * CFrame.new(0, -1 * scale, 0) * TorsoRotation * turnCF)
 			SetCFrame(lleg, ProcessLegs(LegsTarget[1], dt))
 			SetCFrame(rleg, ProcessLegs(LegsTarget[2], dt))
 		else
