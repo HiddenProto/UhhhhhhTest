@@ -16,7 +16,15 @@ local RunService = cloneref(game:GetService("RunService"))
 local TweenService = cloneref(game:GetService("TweenService"))
 local Players = cloneref(game:GetService("Players"))
 local UserInputService = cloneref(game:GetService("UserInputService"))
+local StarterGui = cloneref(game:GetService("StarterGui"))
 local Player = Players.LocalPlayer
+
+local VRSTANCE_BUILD = "9"
+local function Notify(text)
+	pcall(function()
+		StarterGui:SetCore("SendNotification", { Title = "VRStance b" .. VRSTANCE_BUILD, Text = tostring(text), Duration = 5 })
+	end)
+end
 
 AddModule(function()
 	local VRService = cloneref(game:GetService("VRService"))
@@ -32,6 +40,7 @@ AddModule(function()
 			ProperArms = v
 			if LeftJoy then LeftJoy.Base.Visible = v end
 			if RightJoy then RightJoy.Base.Visible = v end
+			Notify("Proper Arm Control = " .. tostring(v) .. " (LeftJoy=" .. tostring(LeftJoy ~= nil) .. ")")
 		end)
 	end
 
@@ -298,8 +307,8 @@ AddModule(function()
 		base.AnchorPoint = Vector2.new(0.5, 0.5)
 		base.Position = UDim2.new(sideScale, sideOff, 0.62, 0)
 		base.Size = UDim2.fromOffset(150, 150)
-		base.BackgroundColor3 = Color3.new(0, 0, 0) -- black, very transparent (outline ring makes it findable)
-		base.BackgroundTransparency = 0.85
+		base.BackgroundColor3 = Color3.new(0, 0, 0) -- moderately visible for now; will dial transparency once confirmed
+		base.BackgroundTransparency = 0.5
 		base.BorderSizePixel = 0
 		base.Visible = false
 		base.Active = true -- sink input so dragging the stick doesn't pan camera/move
@@ -493,6 +502,7 @@ AddModule(function()
 		RightJoy = MakeJoy(1, -90)
 		WireJoy(LeftJoy)
 		WireJoy(RightJoy)
+		Notify("Equipped (build " .. VRSTANCE_BUILD .. "). Toggle 'Proper Arm Control' to show joysticks.")
 	end
 	m.Update = function(dt: number, figure: Model)
 		local t = os.clock()
