@@ -6478,6 +6478,16 @@ function HatReanimator.Start()
 		if hatcols then
 			RootPosition = Vector3.new(RootPosition.X, FallenPartsDestroyHeight, RootPosition.Z)
 		end
+		-- [INSTANT VOID] snap the root to the target the instant the new char exists, so
+		-- it doesn't briefly sit at the spawn point before the HRPTP loop drags it down.
+		-- Skipped while target-flinging (that loop drives the root itself).
+		if not HatReanimator.FlingTargets[1] then
+			pcall(function()
+				RootPart.CFrame = CFrame.new(RootPosition)
+				RootPart.AssemblyLinearVelocity = Vector3.zero
+				RootPart.AssemblyAngularVelocity = Vector3.zero
+			end)
+		end
 		--pcall(function() Player.ReplicationFocus = character end)
 		if hatcols then
 			HatReanimator.Status.HatCollide = "Waiting for Permadeath."
