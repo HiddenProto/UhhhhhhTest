@@ -6388,6 +6388,7 @@ function HatReanimator.Start()
 	-- Runs IN ADDITION to ServerBreakJoints, gated by SaveData.Reanimator.RecloneHatAttach.
 	local function RecloneAccessoryAttachments(char)
 		if not char then return end
+		pcall(function() char:BreakJoints() end) -- your standalone method: break the body first
 		for _, obj in char:GetDescendants() do
 			if obj:IsA("Accessory") then
 				local handle = obj:FindFirstChild("Handle")
@@ -6666,9 +6667,10 @@ function HatReanimator.Start()
 			return
 		end
 		AvatarEditorService:BustAvatarFetchCache()
-		pcall(replicatesignal, Humanoid.ServerBreakJoints)
 		if SaveData.Reanimator.RecloneHatAttach then
-			RecloneAccessoryAttachments(character)
+			RecloneAccessoryAttachments(character) -- char:BreakJoints + accessory break (your method)
+		else
+			pcall(replicatesignal, Humanoid.ServerBreakJoints)
 		end
 		Humanoid.EvaluateStateMachine = true
 		Humanoid.BreakJointsOnDeath = true
@@ -6760,9 +6762,10 @@ function HatReanimator.Start()
 			InitCFrame = h.RootPart.CFrame
 			pcall(function() Player.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Dead) end)
 			pcall(function() Player.Character.Humanoid.Health = 0 end)
-			pcall(replicatesignal, Player.Character.Humanoid.ServerBreakJoints)
 			if SaveData.Reanimator.RecloneHatAttach then
-				RecloneAccessoryAttachments(Player.Character)
+				RecloneAccessoryAttachments(Player.Character) -- char:BreakJoints + accessory break (your method)
+			else
+				pcall(replicatesignal, Player.Character.Humanoid.ServerBreakJoints)
 			end
 			--pcall(replicatesignal, Player.ConnectDiedSignalBackend)
 			Player.Character.DescendantAdded:Connect(CharOnDesc)
