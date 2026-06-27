@@ -5672,6 +5672,17 @@ function HatReanimator.Start()
 						oke = oke and hatmapped.Name == data.Name
 					end
 					if oke then
+						if data.Compose then
+							-- [ACCESSORY PRESETS] nudge from the default placement instead
+							-- of replacing it: keep the mapped C0/Limb, compose C1.
+							return {
+								C0 = hatmapped.C0,
+								C1 = hatmapped.C1 * (data.C1 or CFrame.identity),
+								Limb = data.Limb or hatmapped.Limb,
+								RepRootPart = data.RepRootPart,
+								Scale = hatscale,
+							}
+						end
 						return {
 							C0 = data.C0, C1 = data.C1,
 							Offset = data.Offset or data.CFrame,
@@ -8002,6 +8013,274 @@ DancesPage.Back.Activated:Connect(function()
 		DancesPage.Visible = false
 	end)
 end)
+-- [ACCESSORY PRESETS] ==========================================================
+-- Per-accessory position/orientation tweaks. Saved in SaveData.HatPresets and
+-- applied to the reanimated character through HatReanimator.HatCFrameOverride
+-- (composed onto the default placement). Re-applies on every reanimate while the
+-- accessory is worn; presets can be disabled or deleted.
+SaveData.HatPresets = SaveData.HatPresets or {}
+do
+	local function PresetOffsetCFrame(p)
+		return CFrame.new(p.P[1], p.P[2], p.P[3])
+			* CFrame.Angles(math.rad(p.R[1]), math.rad(p.R[2]), math.rad(p.R[3]))
+	end
+	local function ApplyHatPresets()
+		local ov = HatReanimator.HatCFrameOverride
+		for i = #ov, 1, -1 do
+			if ov[i]._UhPreset then table.remove(ov, i) end
+		end
+		for _, p in SaveData.HatPresets do
+			if not p.Disabled then
+				table.insert(ov, 1, {
+					_UhPreset = true,
+					Compose = true,
+					Name = p.Name,
+					MeshId = (p.MeshId ~= "" and p.MeshId) or nil,
+					TextureId = (p.TextureId ~= "" and p.TextureId) or nil,
+					C1 = PresetOffsetCFrame(p),
+				})
+			end
+		end
+	end
+	-- HatCFrameOverride is table.clear'd whenever a moveset inits, so keep our
+	-- entries present by re-applying when the tagged count drifts.
+	do
+		local function countTagged()
+			local n = 0
+			for _, d in HatReanimator.HatCFrameOverride do
+				if d._UhPreset then n += 1 end
+			end
+			return n
+		end
+		local function countEnabled()
+			local n = 0
+			for _, p in SaveData.HatPresets do if not p.Disabled then n += 1 end end
+			return n
+		end
+		RunService.Heartbeat:Connect(function()
+			if countTagged() ~= countEnabled() then
+				pcall(ApplyHatPresets)
+			end
+		end)
+	end
+	pcall(ApplyHatPresets)
+
+	local function GetWornAccessories()
+		local list = {}
+		local char = Player.Character
+		if char then
+			for _, v in char:GetChildren() do
+				if v:IsA("Accessory") then
+					local handle = v:FindFirstChild("Handle")
+					local mesh, tex = "", ""
+					if handle then
+						if handle:IsA("MeshPart") then
+							mesh, tex = handle.MeshId, handle.TextureID
+						else
+							local sm = handle:FindFirstChildOfClass("SpecialMesh")
+							if sm then mesh, tex = sm.MeshId, sm.TextureId end
+						end
+					end
+					table.insert(list, { Name = v.Name, MeshId = mesh, TextureId = tex })
+				end
+			end
+		end
+		return list
+	end
+	local function FindPreset(meshid, texid, name)
+		for _, p in SaveData.HatPresets do
+			if (meshid ~= "" and p.MeshId == meshid and p.TextureId == texid)
+				or (name ~= "" and p.Name == name) then
+				return p
+			end
+		end
+		return nil
+	end
+
+	local RefreshPresetsPage, OpenPresetEditor
+
+	local function MakeStepper(parent, label, get, set, step)
+		local margin = 5
+		local row = Util.Instance("Frame", parent)
+		row.AnchorPoint = Vector2.new(0.5, 0)
+		row.Size = UDim2.new(1, 0, 0, 34)
+		row.BackgroundTransparency = 1
+		row.LayoutOrder = #parent:GetChildren()
+		local lbl = Util.Instance("TextLabel", row)
+		lbl.Position = UDim2.new(0, margin, 0, 0)
+		lbl.Size = UDim2.new(0.34, -margin, 1, -margin)
+		lbl.BackgroundTransparency = 1
+		lbl.Font = Enum.Font.Code
+		lbl.TextColor3 = Color3.new(1, 1, 1)
+		lbl.TextXAlignment = Enum.TextXAlignment.Left
+		lbl.TextYAlignment = Enum.TextYAlignment.Center
+		lbl.TextSize = 16
+		lbl.Text = label
+		RegisterTextLabel(lbl)
+		local valLbl = Util.Instance("TextLabel", row)
+		valLbl.Position = UDim2.new(0.50, margin, 0, 0)
+		valLbl.Size = UDim2.new(0.34, -margin * 2, 1, -margin)
+		valLbl.BackgroundTransparency = 1
+		valLbl.Font = Enum.Font.Code
+		valLbl.TextColor3 = Color3.new(1, 1, 1)
+		valLbl.TextXAlignment = Enum.TextXAlignment.Center
+		valLbl.TextYAlignment = Enum.TextYAlignment.Center
+		valLbl.TextSize = 16
+		RegisterTextLabel(valLbl)
+		local function mkBtn(xscale, woff, txt)
+			local b = Util.Instance("TextButton", row)
+			b.AnchorPoint = Vector2.new(0, 0)
+			b.Position = UDim2.new(xscale, margin, 0, margin // 2)
+			b.Size = UDim2.new(0.16, woff, 1, -margin)
+			b.BackgroundColor3 = Color3.new(1, 1, 1)
+			b.BorderSizePixel = 0
+			b.Text = ""
+			b.AutoButtonColor = true
+			local t = Util.Instance("TextLabel", b)
+			t.AnchorPoint = Vector2.new(0.5, 0.5)
+			t.Position = UDim2.fromScale(0.5, 0.5)
+			t.Size = UDim2.new(1, 0, 1, -margin)
+			t.BackgroundTransparency = 1
+			t.Font = Enum.Font.Code
+			t.TextColor3 = Color3.new(1, 1, 1)
+			t.TextXAlignment = Enum.TextXAlignment.Center
+			t.TextYAlignment = Enum.TextYAlignment.Center
+			t.TextSize = 20
+			t.Text = txt
+			RegisterTextLabel(t)
+			Stylize(b)
+			return b
+		end
+		local function refresh() valLbl.Text = string.format("%.2f", get()) end
+		refresh()
+		mkBtn(0.34, -margin, "-").Activated:Connect(function() set(get() - step) refresh() pcall(ApplyHatPresets) end)
+		mkBtn(0.84, -margin * 2, "+").Activated:Connect(function() set(get() + step) refresh() pcall(ApplyHatPresets) end)
+		return row
+	end
+
+	local PresetsPage = UI.CreatePage()
+	PresetsPage.ZIndex = 1
+	PresetsPage.Position = UDim2.new(0.5, 360, 0.5, 0)
+	PresetsPage.Interactable = false
+	PresetsPage.Visible = false
+
+	OpenPresetEditor = function(preset)
+		local page = UI.CreatePage()
+		page.ZIndex = 2
+		page.Position = UDim2.new(0.5, 360, 0.5, 0)
+		page.Interactable = false
+		page.Visible = true
+		local function slideOutAnd(after)
+			page.Interactable = false
+			PresetsPage.Interactable = false
+			local tw = TweenService:Create(page, TweenInfo.new(0.5, Enum.EasingStyle.Cubic, Enum.EasingDirection.Out), { Position = UDim2.new(0.5, 360, 0.5, 0) })
+			tw:Play()
+			tw.Completed:Connect(function()
+				PresetsPage.Interactable = true
+				page:Destroy()
+				if after then after() end
+			end)
+		end
+		UI.CreateButton(page, " &lt; Back", 20).Activated:Connect(function() slideOutAnd(RefreshPresetsPage) end)
+		UI.CreateSeparator(page)
+		UI.CreateText(page, preset.Name, 20, Enum.TextXAlignment.Left)
+		UI.CreateSwitch(page, "Enabled", not preset.Disabled).Changed:Connect(function(v)
+			preset.Disabled = not v
+			pcall(ApplyHatPresets)
+		end)
+		UI.CreateSeparator(page)
+		UI.CreateText(page, "* Position (studs) *", 14, Enum.TextXAlignment.Center)
+		local axes = {"X", "Y", "Z"}
+		for i = 1, 3 do
+			MakeStepper(page, "Pos " .. axes[i], function() return preset.P[i] end, function(v) preset.P[i] = v end, 0.1)
+		end
+		UI.CreateText(page, "* Orientation (deg) *", 14, Enum.TextXAlignment.Center)
+		for i = 1, 3 do
+			MakeStepper(page, "Rot " .. axes[i], function() return preset.R[i] end, function(v) preset.R[i] = v end, 5)
+		end
+		UI.CreateSeparator(page)
+		UI.CreateButton(page, "Reset to 0", 18).Activated:Connect(function()
+			preset.P = {0, 0, 0}
+			preset.R = {0, 0, 0}
+			pcall(ApplyHatPresets)
+			page:Destroy()
+			OpenPresetEditor(preset)
+		end)
+		UI.CreateButton(page, "Delete Preset", 18).Activated:Connect(function()
+			local idx = table.find(SaveData.HatPresets, preset)
+			if idx then table.remove(SaveData.HatPresets, idx) end
+			pcall(ApplyHatPresets)
+			slideOutAnd(RefreshPresetsPage)
+		end)
+		local tw = TweenService:Create(page, TweenInfo.new(0.5, Enum.EasingStyle.Cubic, Enum.EasingDirection.In), { Position = UDim2.new(0.5, 0, 0.5, 0) })
+		tw:Play()
+		tw.Completed:Connect(function() page.Interactable = true end)
+	end
+
+	RefreshPresetsPage = function()
+		Util.ClearAllChildrenGui(PresetsPage)
+		UI.CreateButton(PresetsPage, " &lt; Hurry back", 20).Activated:Connect(function()
+			PresetsPage.Interactable = false
+			MainPage.Interactable = false
+			local tw = TweenService:Create(PresetsPage, TweenInfo.new(0.5, Enum.EasingStyle.Cubic, Enum.EasingDirection.Out), { Position = UDim2.new(0.5, 360, 0.5, 0) })
+			tw:Play()
+			tw.Completed:Connect(function()
+				MainPage.Interactable = true
+				PresetsPage.Visible = false
+			end)
+		end)
+		UI.CreateSeparator(PresetsPage)
+		UI.CreateText(PresetsPage, "Tweak a worn accessory's offset; saved presets re-apply to every reanimate while you wear it.", 11, Enum.TextXAlignment.Center)
+		UI.CreateText(PresetsPage, "* Worn Accessories *", 14, Enum.TextXAlignment.Center)
+		UI.CreateButton(PresetsPage, "Refresh worn list", 16).Activated:Connect(function() RefreshPresetsPage() end)
+		local worn = GetWornAccessories()
+		if #worn == 0 then
+			UI.CreateText(PresetsPage, "(no accessories worn)", 11, Enum.TextXAlignment.Center)
+		end
+		for _, acc in worn do
+			UI.CreateButton(PresetsPage, "Edit: " .. acc.Name, 16).Activated:Connect(function()
+				local p = FindPreset(acc.MeshId, acc.TextureId, acc.Name)
+				if not p then
+					p = { Name = acc.Name, MeshId = acc.MeshId, TextureId = acc.TextureId, P = {0, 0, 0}, R = {0, 0, 0}, Disabled = false }
+					table.insert(SaveData.HatPresets, p)
+					pcall(ApplyHatPresets)
+				end
+				OpenPresetEditor(p)
+			end)
+		end
+		UI.CreateSeparator(PresetsPage)
+		UI.CreateText(PresetsPage, "* Saved Presets *", 14, Enum.TextXAlignment.Center)
+		if #SaveData.HatPresets == 0 then
+			UI.CreateText(PresetsPage, "(none yet)", 11, Enum.TextXAlignment.Center)
+		end
+		for _, p in SaveData.HatPresets do
+			UI.CreateText(PresetsPage, p.Name .. (p.Disabled and "  [disabled]" or ""), 14, Enum.TextXAlignment.Left)
+			UI.CreateButton(PresetsPage, "Edit", 16).Activated:Connect(function() OpenPresetEditor(p) end)
+			UI.CreateSwitch(PresetsPage, "Enabled", not p.Disabled).Changed:Connect(function(v)
+				p.Disabled = not v
+				pcall(ApplyHatPresets)
+			end)
+			UI.CreateButton(PresetsPage, "Delete", 16).Activated:Connect(function()
+				local idx = table.find(SaveData.HatPresets, p)
+				if idx then table.remove(SaveData.HatPresets, idx) end
+				pcall(ApplyHatPresets)
+				RefreshPresetsPage()
+			end)
+			UI.CreateSeparator(PresetsPage)
+		end
+	end
+
+	UI.CreateButton(MainPage, "Accessory Presets &gt;", 20).Activated:Connect(function()
+		PresetsPage.Interactable = false
+		PresetsPage.Visible = true
+		MainPage.Interactable = false
+		RefreshPresetsPage()
+		local tw = TweenService:Create(PresetsPage, TweenInfo.new(0.5, Enum.EasingStyle.Cubic, Enum.EasingDirection.In), { Position = UDim2.new(0.5, 0, 0.5, 0) })
+		tw:Play()
+		tw.Completed:Connect(function() PresetsPage.Interactable = true end)
+	end)
+end
+
 -- [CUSTOM] Dedicated section for our own modified movesets/dances.
 -- Modules dropped in UhhhhhhReanim/CustomModules/ are routed to this page
 -- instead of the vanilla Movesets/Dances pages. See ForceModuleReload below.
