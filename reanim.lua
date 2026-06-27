@@ -5061,10 +5061,6 @@ function HatReanimator.Config(parent)
 		HatReanimator.Permadeath = val
 		SaveData.Reanimator.HatsPatchmahub = not val
 	end)
-	UI.CreateSwitch(parent, "Reclone Accessory Attachments", SaveData.Reanimator.RecloneHatAttach).Changed:Connect(function(val)
-		SaveData.Reanimator.RecloneHatAttach = val
-	end)
-	UI.CreateText(parent, "for games where accessories stay on limbs after death: drops accessory welds + reclones their attachments (on top of ServerBreakJoints)", 10, Enum.TextXAlignment.Center)
 	UI.CreateDropdown(parent, "respawntp", {
 		"The Void",
 		"Behind ReanimCharacter",
@@ -5967,30 +5963,6 @@ function HatReanimator.Start()
 		elseif v:IsA("Accessory") and v.Parent == Player.Character then
 			local handle = v:WaitForChild("Handle", 10)
 			if handle then
-				-- [ACCESSORY DETACH] if this accessory was refreshed/re-added AFTER the
-				-- character already died, reclone its attachments too so it doesn't stay
-				-- stuck on a limb. Only when dead (the live initial batch is handled at
-				-- the detach point) and only if the option is on.
-				if SaveData.Reanimator.RecloneHatAttach and handle:IsA("BasePart") then
-					local hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
-					if hum and (hum.Health <= 0 or hum:GetState() == Enum.HumanoidStateType.Dead) then
-						pcall(function() handle:BreakJoints() end)
-						for _, child in handle:GetChildren() do
-							if child:IsA("Weld") or child:IsA("WeldConstraint") or child:IsA("Motor6D") then
-								pcall(function() child:Destroy() end)
-							end
-						end
-						for _, child in handle:GetChildren() do
-							if child:IsA("Attachment") then
-								child.Archivable = true
-								local clone = child:Clone()
-								pcall(function() child:Destroy() end)
-								clone.Parent = handle
-							end
-						end
-						HatReanimator.RebuildRequired = true -- re-grab this accessory on fresh attachments
-					end
-				end
 				if not table.find(CharHats, v) then
 					table.insert(CharHats, v)
 					local conn = nil
@@ -6382,39 +6354,6 @@ function HatReanimator.Start()
 		end,
 	}
 	local NumHats = 0
-	-- [ACCESSORY DETACH] For games where accessories stay welded to the limbs after
-	-- death: drop the accessory welds and KILL + RECLONE each handle's attachments so
-	-- the stuck connection is severed. The clones keep the same Name/CFrame/props, so
-	-- the reanimator can still map & place the accessory afterwards (no bug-out).
-	-- Runs IN ADDITION to ServerBreakJoints, gated by SaveData.Reanimator.RecloneHatAttach.
-	local function RecloneAccessoryAttachments(char)
-		if not char then return end
-		pcall(function() char:BreakJoints() end) -- your standalone method: break the body first
-		for _, obj in char:GetDescendants() do
-			if obj:IsA("Accessory") then
-				local handle = obj:FindFirstChild("Handle")
-				if handle and handle:IsA("BasePart") then
-					pcall(function() handle:BreakJoints() end)
-					for _, child in handle:GetChildren() do
-						if child:IsA("Weld") or child:IsA("WeldConstraint") or child:IsA("Motor6D") then
-							pcall(function() child:Destroy() end)
-						end
-					end
-					for _, child in handle:GetChildren() do
-						if child:IsA("Attachment") then
-							child.Archivable = true
-							local clone = child:Clone()
-							pcall(function() child:Destroy() end)
-							clone.Parent = handle
-						end
-					end
-				end
-			end
-		end
-		-- rebuild the hat map on the fresh attachments so the reanimator re-grabs the
-		-- accessories and keeps moving them with the fake rig (no stale references).
-		HatReanimator.RebuildRequired = true
-	end
 	local function OnCharacter(character)
 		if HatReanimator.DontFireCharAddOnThisChar == character then return end
 		currentping = Player:GetNetworkPing()
@@ -6671,11 +6610,7 @@ function HatReanimator.Start()
 			return
 		end
 		AvatarEditorService:BustAvatarFetchCache()
-		if SaveData.Reanimator.RecloneHatAttach then
-			RecloneAccessoryAttachments(character) -- char:BreakJoints + accessory break (your method)
-		else
-			pcall(replicatesignal, Humanoid.ServerBreakJoints)
-		end
+		pcall(replicatesignal, Humanoid.ServerBreakJoints)
 		Humanoid.EvaluateStateMachine = true
 		Humanoid.BreakJointsOnDeath = true
 		Humanoid.Health = 0
@@ -6766,11 +6701,7 @@ function HatReanimator.Start()
 			InitCFrame = h.RootPart.CFrame
 			pcall(function() Player.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Dead) end)
 			pcall(function() Player.Character.Humanoid.Health = 0 end)
-			if SaveData.Reanimator.RecloneHatAttach then
-				RecloneAccessoryAttachments(Player.Character) -- char:BreakJoints + accessory break (your method)
-			else
-				pcall(replicatesignal, Player.Character.Humanoid.ServerBreakJoints)
-			end
+			pcall(replicatesignal, Player.Character.Humanoid.ServerBreakJoints)
 			--pcall(replicatesignal, Player.ConnectDiedSignalBackend)
 			Player.Character.DescendantAdded:Connect(CharOnDesc)
 			for _,v in Player.Character:GetDescendants() do
