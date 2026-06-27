@@ -5340,6 +5340,7 @@ function HatReanimator.Start()
 	local BaseParts = {}
 	local CharTools = {}
 	local CharHats = {}
+	local AccGhosts = {} -- [DROP] real handle -> invisible physics "ghost" part it follows
 
 	local HatRefs = {}
 	local Hat2HatRefs = {}
@@ -7012,14 +7013,42 @@ function HatReanimator.Start()
 					end
 				end
 				debug.profileend()
+				if not HatReanimator.Dropped and next(AccGhosts) then
+					-- [DROP] picked back up: remove the ghosts, accessories follow the rig again
+					for h, g in AccGhosts do
+						if g then g:Destroy() end
+						AccGhosts[h] = nil
+					end
+				end
 				debug.profilebegin("Uhhhhhh > Alignments")
 				for _,hat in CharHats do
 					local handle = hat:FindFirstChild("Handle")
 					if handle and handle:IsA("BasePart") then
 						if HatReanimator.Dropped then
-							-- [DROP] leave the accessory where it is + give collision (no rig pull)
-							handle.CanCollide = true
+							-- [DROP] spawn an invisible physics ghost clone at the accessory's spot;
+							-- it falls with collision and the real accessory follows it like the rig.
+							local ghost = AccGhosts[handle]
+							if not ghost or not ghost.Parent then
+								ghost = handle:Clone()
+								for _,c in ghost:GetChildren() do
+									if not (c:IsA("DataModelMesh") or c:IsA("SpecialMesh")) then c:Destroy() end
+								end
+								ghost.Name = "UhhhhhhDropGhost"
+								ghost.Transparency = 1
+								ghost.CanCollide = true
+								ghost.CanQuery = false
+								ghost.CanTouch = false
+								ghost.Anchored = false
+								ghost.Massless = false
+								ghost.CustomPhysicalProperties = nil
+								ghost.CFrame = handle.CFrame
+								ghost.AssemblyLinearVelocity = Vector3.zero
+								ghost.Parent = workspace
+								AccGhosts[handle] = ghost
+							end
+							handle.CanCollide = false
 							handle.LocalTransparencyModifier = 0
+							SetUACFrameNetless(handle, dt, ghost.CFrame, ghost.AssemblyLinearVelocity, false, false)
 							continue
 						end
 						handle.CanCollide = false
@@ -7124,6 +7153,7 @@ function HatReanimator.Start()
 		debug.profileend()
 	end
 	HatReanimator.Dropped = false -- [DROP] deanimating clears the dropped state
+	for h, g in AccGhosts do if g then g:Destroy() end AccGhosts[h] = nil end -- [DROP] cleanup ghosts
 	ResetHatRefs()
 	for _,v in HatRefs do if v.PH then v.PH:Destroy() end end
 	CharConn:Disconnect()
