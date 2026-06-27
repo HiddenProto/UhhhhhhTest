@@ -7036,6 +7036,9 @@ function HatReanimator.Start()
 								ghost.Name = "UhhhhhhDropGhost"
 								ghost.Transparency = 1
 								ghost.CanCollide = true
+								if ghost:IsA("MeshPart") then
+									ghost.CollisionFidelity = Enum.CollisionFidelity.PreciseConvexDecomposition -- exact mesh collision
+								end
 								ghost.CanQuery = false
 								ghost.CanTouch = false
 								ghost.Anchored = false
