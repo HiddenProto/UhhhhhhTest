@@ -5061,6 +5061,10 @@ function HatReanimator.Config(parent)
 		HatReanimator.Permadeath = val
 		SaveData.Reanimator.HatsPatchmahub = not val
 	end)
+	UI.CreateSwitch(parent, "Fast Reanim", SaveData.Reanimator.FastReanim).Changed:Connect(function(val)
+		SaveData.Reanimator.FastReanim = val
+	end)
+	UI.CreateText(parent, "collapses the reanim's internal hat delays to one frame each (much faster re-reanimate; may be less reliable in some games)", 10, Enum.TextXAlignment.Center)
 	UI.CreateDropdown(parent, "respawntp", {
 		"The Void",
 		"Behind ReanimCharacter",
@@ -6361,6 +6365,11 @@ function HatReanimator.Start()
 		end,
 	}
 	local NumHats = 0
+	-- [FAST REANIM] collapse the reanim's internal hat-collide delays to one frame.
+	local function fastwait(t)
+		if SaveData.Reanimator.FastReanim then return task.wait() end
+		return task.wait(t)
+	end
 	local function OnCharacter(character)
 		if HatReanimator.DontFireCharAddOnThisChar == character then return end
 		currentping = Player:GetNetworkPing()
@@ -6557,7 +6566,7 @@ function HatReanimator.Start()
 		lgloop = RunService.Heartbeat:Connect(function(dt)
 			selhatcol.HRPTP(dt, character, Humanoid, RootPosition, RootPart, readystate)
 		end)
-		if hatcols then task.wait(0.2) end
+		if hatcols then fastwait(0.2) end
 		HatReanimator.Status.ReanimState = "Loading Permadeath."
 		if perma then
 			HatReanimator.Status.Permadeath = "no."
@@ -6577,7 +6586,7 @@ function HatReanimator.Start()
 		selhatcol.State1(character, Humanoid, CharHats)
 		local claimarea = RootPart.CFrame.Position + RootPart.CFrame.LookVector * 8
 		claimarea = Vector3.new(claimarea.X, math.max(FallenPartsDestroyHeight + 16, claimarea.Y + 4), claimarea.Z)
-		task.wait(selhatcol.Wait1 or 0.1)
+		fastwait(selhatcol.Wait1 or 0.1)
 		if not character:IsDescendantOf(workspace) then
 			lgloop:Disconnect()
 			return
@@ -6608,7 +6617,7 @@ function HatReanimator.Start()
 			end
 		end
 		Humanoid:ChangeState(Enum.HumanoidStateType.FallingDown)
-		task.wait(selhatcol.Wait2 or 0.15)
+		fastwait(selhatcol.Wait2 or 0.15)
 		if not character:IsDescendantOf(workspace) then
 			lgloop:Disconnect()
 			for _,c in bringconns do
