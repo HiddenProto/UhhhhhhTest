@@ -8119,6 +8119,9 @@ do
 	local function AvatarMatches(cfg)
 		if not cfg.Required or #cfg.Required == 0 then return false end
 		local worn = GetWornAccessories()
+		-- EXACT match: must be wearing exactly these accessories (no extras, none
+		-- missing) — same count, and every required one present.
+		if #worn ~= #cfg.Required then return false end
 		for _, req in cfg.Required do
 			local found = false
 			for _, w in worn do
