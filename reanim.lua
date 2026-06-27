@@ -5061,10 +5061,10 @@ function HatReanimator.Config(parent)
 		HatReanimator.Permadeath = val
 		SaveData.Reanimator.HatsPatchmahub = not val
 	end)
-	UI.CreateSwitch(parent, "Detach via BreakJoints (alt)", SaveData.Reanimator.UseBreakJoints).Changed:Connect(function(val)
-		SaveData.Reanimator.UseBreakJoints = val
+	UI.CreateSwitch(parent, "Reclone Accessory Attachments", SaveData.Reanimator.RecloneHatAttach).Changed:Connect(function(val)
+		SaveData.Reanimator.RecloneHatAttach = val
 	end)
-	UI.CreateText(parent, "alt detach: client BreakJoints + drop accessory welds, instead of ServerBreakJoints", 10, Enum.TextXAlignment.Center)
+	UI.CreateText(parent, "for games where accessories stay on limbs after death: drops accessory welds + reclones their attachments (on top of ServerBreakJoints)", 10, Enum.TextXAlignment.Center)
 	UI.CreateDropdown(parent, "respawntp", {
 		"The Void",
 		"Behind ReanimCharacter",
@@ -6358,22 +6358,28 @@ function HatReanimator.Start()
 		end,
 	}
 	local NumHats = 0
-	-- [BREAKJOINTS] Alternative detach method: client BreakJoints + drop accessory
-	-- welds/motors. Swappable with the default ServerBreakJoints via the
-	-- "Detach via BreakJoints" switch (SaveData.Reanimator.UseBreakJoints).
-	local function BreakDeJoints(char, withAccessories)
+	-- [ACCESSORY DETACH] For games where accessories stay welded to the limbs after
+	-- death: drop the accessory welds and KILL + RECLONE each handle's attachments so
+	-- the stuck connection is severed. The clones keep the same Name/CFrame/props, so
+	-- the reanimator can still map & place the accessory afterwards (no bug-out).
+	-- Runs IN ADDITION to ServerBreakJoints, gated by SaveData.Reanimator.RecloneHatAttach.
+	local function RecloneAccessoryAttachments(char)
 		if not char then return end
-		pcall(function() char:BreakJoints() end)
-		if withAccessories then
-			for _, obj in char:GetDescendants() do
-				if obj:IsA("Accessory") then
-					local handle = obj:FindFirstChild("Handle")
-					if handle and handle:IsA("BasePart") then
-						pcall(function() handle:BreakJoints() end)
-						for _, child in handle:GetChildren() do
-							if child:IsA("Weld") or child:IsA("WeldConstraint") or child:IsA("Motor6D") then
-								child:Destroy()
-							end
+		for _, obj in char:GetDescendants() do
+			if obj:IsA("Accessory") then
+				local handle = obj:FindFirstChild("Handle")
+				if handle and handle:IsA("BasePart") then
+					for _, child in handle:GetChildren() do
+						if child:IsA("Weld") or child:IsA("WeldConstraint") or child:IsA("Motor6D") then
+							pcall(function() child:Destroy() end)
+						end
+					end
+					for _, child in handle:GetChildren() do
+						if child:IsA("Attachment") then
+							child.Archivable = true
+							local clone = child:Clone()
+							pcall(function() child:Destroy() end)
+							clone.Parent = handle
 						end
 					end
 				end
@@ -6636,10 +6642,9 @@ function HatReanimator.Start()
 			return
 		end
 		AvatarEditorService:BustAvatarFetchCache()
-		if SaveData.Reanimator.UseBreakJoints then
-			BreakDeJoints(character, true)
-		else
-			pcall(replicatesignal, Humanoid.ServerBreakJoints)
+		pcall(replicatesignal, Humanoid.ServerBreakJoints)
+		if SaveData.Reanimator.RecloneHatAttach then
+			RecloneAccessoryAttachments(character)
 		end
 		Humanoid.EvaluateStateMachine = true
 		Humanoid.BreakJointsOnDeath = true
@@ -6731,10 +6736,9 @@ function HatReanimator.Start()
 			InitCFrame = h.RootPart.CFrame
 			pcall(function() Player.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Dead) end)
 			pcall(function() Player.Character.Humanoid.Health = 0 end)
-			if SaveData.Reanimator.UseBreakJoints then
-				BreakDeJoints(Player.Character, true)
-			else
-				pcall(replicatesignal, Player.Character.Humanoid.ServerBreakJoints)
+			pcall(replicatesignal, Player.Character.Humanoid.ServerBreakJoints)
+			if SaveData.Reanimator.RecloneHatAttach then
+				RecloneAccessoryAttachments(Player.Character)
 			end
 			--pcall(replicatesignal, Player.ConnectDiedSignalBackend)
 			Player.Character.DescendantAdded:Connect(CharOnDesc)
