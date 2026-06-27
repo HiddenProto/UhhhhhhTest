@@ -269,12 +269,19 @@ AddModule(function()
 			-- right: centre = forward/away (into the screen), edge = the pure screen axis
 			-- (full left = screen-left, full up = screen-up, etc.).
 			pointing = js.Held
+			-- Take the camera's WORLD axes into the arm's frame (vro). This rotates
+			-- smoothly and never mirrors like headcf does past 90deg of turn, so forward
+			-- stays "away from camera" no matter how much you turn.
+			local cam = ReanimCamera.CFrame
+			local fwd = vro:VectorToObjectSpace(cam.LookVector)
+			local right = vro:VectorToObjectSpace(cam.RightVector)
+			local up = vro:VectorToObjectSpace(cam.UpVector)
 			local sx, sy = js.Vec.X, js.Vec.Y
 			local r = math.min(1, math.sqrt(sx * sx + sy * sy))
-			local planar = headcf.RightVector * sx + headcf.UpVector * sy
-			if planar.Magnitude > 1e-4 then planar = planar.Unit else planar = headcf.LookVector end
+			local planar = right * sx + up * sy
+			if planar.Magnitude > 1e-4 then planar = planar.Unit else planar = fwd end
 			local a = r * (math.pi / 2) -- 0 at centre (forward) -> 90deg at edge (pure axis)
-			cast = (headcf.LookVector * math.cos(a) + planar * math.sin(a)).Unit
+			cast = (fwd * math.cos(a) + planar * math.sin(a)).Unit
 			if js.Held then
 				-- FULLY joystick-controlled: the arm points exactly along the stick and
 				-- nothing else instructs it — no rest-pose blend, no random wobble.
