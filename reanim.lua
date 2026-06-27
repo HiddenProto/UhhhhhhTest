@@ -8024,6 +8024,20 @@ do
 		return CFrame.new(p.P[1], p.P[2], p.P[3])
 			* CFrame.Angles(math.rad(p.R[1]), math.rad(p.R[2]), math.rad(p.R[3]))
 	end
+	-- Normalize an asset id the same way the engine's AssetIdMatch does, so our
+	-- stored ids actually match (it normalizes the accessory side but compares it
+	-- to our value verbatim — so we must store the bare numeric id).
+	local function NormalizeId(s)
+		s = s or ""
+		if s:sub(1, 11) == "rbxasset://" then
+			return s:match("rbxasset://(.+)") or s
+		elseif s:sub(1, 13) == "rbxassetid://" then
+			return s:match("rbxassetid://(%d+)") or s
+		elseif s:sub(1, 4) == "http" then
+			return s:match("id=(%d+)") or s
+		end
+		return s
+	end
 	local function ApplyHatPresets()
 		local ov = HatReanimator.HatCFrameOverride
 		for i = #ov, 1, -1 do
@@ -8031,14 +8045,15 @@ do
 		end
 		for _, p in SaveData.HatPresets do
 			if not p.Disabled then
-				table.insert(ov, 1, {
-					_UhPreset = true,
-					Compose = true,
-					Name = p.Name,
-					MeshId = (p.MeshId ~= "" and p.MeshId) or nil,
-					TextureId = (p.TextureId ~= "" and p.TextureId) or nil,
-					C1 = PresetOffsetCFrame(p),
-				})
+				local entry = { _UhPreset = true, Compose = true, C1 = PresetOffsetCFrame(p) }
+				local mid, tid = NormalizeId(p.MeshId), NormalizeId(p.TextureId)
+				if mid ~= "" then
+					entry.MeshId = mid
+					if tid ~= "" then entry.TextureId = tid end
+				else
+					entry.Name = p.Name
+				end
+				table.insert(ov, 1, entry)
 			end
 		end
 	end
@@ -8081,15 +8096,16 @@ do
 							if sm then mesh, tex = sm.MeshId, sm.TextureId end
 						end
 					end
-					table.insert(list, { Name = v.Name, MeshId = mesh, TextureId = tex })
+					table.insert(list, { Name = v.Name, MeshId = NormalizeId(mesh), TextureId = NormalizeId(tex) })
 				end
 			end
 		end
 		return list
 	end
 	local function FindPreset(meshid, texid, name)
+		meshid, texid = NormalizeId(meshid), NormalizeId(texid)
 		for _, p in SaveData.HatPresets do
-			if (meshid ~= "" and p.MeshId == meshid and p.TextureId == texid)
+			if (meshid ~= "" and NormalizeId(p.MeshId) == meshid and NormalizeId(p.TextureId) == texid)
 				or (name ~= "" and p.Name == name) then
 				return p
 			end
