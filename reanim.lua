@@ -8019,6 +8019,7 @@ end)
 -- (composed onto the default placement). Re-applies on every reanimate while the
 -- accessory is worn; presets can be disabled or deleted.
 SaveData.HatPresets = SaveData.HatPresets or {}
+SaveData.AvatarConfigs = SaveData.AvatarConfigs or {}
 do
 	local function PresetOffsetCFrame(p)
 		return CFrame.new(p.P[1], p.P[2], p.P[3])
@@ -8111,6 +8112,71 @@ do
 			end
 		end
 		return nil
+	end
+
+	-- [AVATAR CONFIGS] A config is "matched" when every accessory it requires is
+	-- currently worn. The first enabled+matched config applies its scale + presets.
+	local function AvatarMatches(cfg)
+		if not cfg.Required or #cfg.Required == 0 then return false end
+		local worn = GetWornAccessories()
+		for _, req in cfg.Required do
+			local found = false
+			for _, w in worn do
+				if (req.MeshId ~= "" and NormalizeId(w.MeshId) == NormalizeId(req.MeshId) and NormalizeId(w.TextureId) == NormalizeId(req.TextureId))
+					or (req.Name ~= "" and w.Name == req.Name) then
+					found = true
+					break
+				end
+			end
+			if not found then return false end
+		end
+		return true
+	end
+	local _avatarScaleOverridden = false
+	local function ApplyAvatarConfigs()
+		local active
+		for _, cfg in SaveData.AvatarConfigs do
+			if not cfg.Disabled and AvatarMatches(cfg) then active = cfg break end
+		end
+		-- scale (sizing): force the config's scale while matched; restore the user's
+		-- saved scale when nothing is matched anymore.
+		if active and active.Scale then
+			Reanimate.CharacterScale = active.Scale
+			_avatarScaleOverridden = true
+		elseif _avatarScaleOverridden then
+			Reanimate.CharacterScale = SaveData.CharacterScale or 1
+			_avatarScaleOverridden = false
+		end
+		-- accessory presets (tagged separately from the always-on HatPresets)
+		local ov = HatReanimator.HatCFrameOverride
+		for i = #ov, 1, -1 do
+			if ov[i]._UhAvatar then table.remove(ov, i) end
+		end
+		if active and active.Presets then
+			for _, p in active.Presets do
+				local entry = { _UhAvatar = true, Compose = true, C1 = PresetOffsetCFrame(p) }
+				local mid, tid = NormalizeId(p.MeshId), NormalizeId(p.TextureId)
+				if mid ~= "" then
+					entry.MeshId = mid
+					if tid ~= "" then entry.TextureId = tid end
+				else
+					entry.Name = p.Name
+				end
+				table.insert(ov, 1, entry)
+			end
+		end
+		return active
+	end
+	-- re-evaluate periodically (cheap; worn accessories change rarely)
+	do
+		local t = 0
+		RunService.Heartbeat:Connect(function(dt)
+			t += dt
+			if t >= 0.5 then
+				t = 0
+				pcall(ApplyAvatarConfigs)
+			end
+		end)
 	end
 
 	local RefreshPresetsPage, OpenPresetEditor
@@ -8280,6 +8346,60 @@ do
 				local idx = table.find(SaveData.HatPresets, p)
 				if idx then table.remove(SaveData.HatPresets, idx) end
 				pcall(ApplyHatPresets)
+				RefreshPresetsPage()
+			end)
+			UI.CreateSeparator(PresetsPage)
+		end
+		-- [AVATAR CONFIGS] advanced: scale + presets bundles tied to a worn avatar
+		UI.CreateSeparator(PresetsPage)
+		UI.CreateText(PresetsPage, "* Avatar Configs (advanced) *", 14, Enum.TextXAlignment.Center)
+		UI.CreateText(PresetsPage, "Saves your current Character Scale + accessory presets, and auto-applies them only while you're wearing this avatar (these accessories).", 11, Enum.TextXAlignment.Center)
+		UI.CreateButton(PresetsPage, "Save current avatar as new config", 16).Activated:Connect(function()
+			local worn = GetWornAccessories()
+			if #worn == 0 then
+				Util.UINotify("Wear an avatar (accessories) first")
+				return
+			end
+			table.insert(SaveData.AvatarConfigs, {
+				Name = "Avatar " .. (#SaveData.AvatarConfigs + 1),
+				Required = worn,
+				Scale = Reanimate.CharacterScale,
+				Presets = Util.DeepcopyTable(SaveData.HatPresets),
+				Disabled = false,
+			})
+			pcall(ApplyAvatarConfigs)
+			RefreshPresetsPage()
+		end)
+		if #SaveData.AvatarConfigs == 0 then
+			UI.CreateText(PresetsPage, "(none yet)", 11, Enum.TextXAlignment.Center)
+		end
+		for _, cfg in SaveData.AvatarConfigs do
+			local statusText = UI.CreateText(PresetsPage, "", 14, Enum.TextXAlignment.Left)
+			local nextUpdate = 0
+			Util.LinkDestroyI2C(statusText, RunService.RenderStepped:Connect(function()
+				if os.clock() < nextUpdate then return end
+				nextUpdate = os.clock() + 0.4
+				statusText.Text = cfg.Name .. "  ->  " .. (AvatarMatches(cfg) and "<b>TRUE</b> (worn)" or "false") .. (cfg.Disabled and "  [disabled]" or "")
+			end))
+			local nameBox = UI.CreateTextbox(PresetsPage, cfg.Name, "rename config...", 14)
+			nameBox.FocusLost:Connect(function()
+				if #nameBox.Text > 0 then cfg.Name = nameBox.Text end
+			end)
+			UI.CreateSwitch(PresetsPage, "Enabled", not cfg.Disabled).Changed:Connect(function(v)
+				cfg.Disabled = not v
+				pcall(ApplyAvatarConfigs)
+			end)
+			UI.CreateButton(PresetsPage, "Update to current avatar + scale + presets", 14).Activated:Connect(function()
+				cfg.Required = GetWornAccessories()
+				cfg.Scale = Reanimate.CharacterScale
+				cfg.Presets = Util.DeepcopyTable(SaveData.HatPresets)
+				pcall(ApplyAvatarConfigs)
+				Util.UINotify("Updated '" .. cfg.Name .. "'")
+			end)
+			UI.CreateButton(PresetsPage, "Delete", 14).Activated:Connect(function()
+				local idx = table.find(SaveData.AvatarConfigs, cfg)
+				if idx then table.remove(SaveData.AvatarConfigs, idx) end
+				pcall(ApplyAvatarConfigs)
 				RefreshPresetsPage()
 			end)
 			UI.CreateSeparator(PresetsPage)
