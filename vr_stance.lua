@@ -35,12 +35,19 @@ AddModule(function()
 	m.Description = "fake but real vr altho clunky — custom build w/ Stance toggle\n\nM1 - Point Left Hand\nM2 - Point Right Hand\nLeftControl/Button B - Toggle Run\nC - Crouch\nF / Stance button - Toggle upright idle stance"
 	m.Assets = {}
 
+	-- [ARMS] These MUST be declared before m.Config — it (and Update) share them.
+	local ProperArms = false -- false = M1/M2 point, true = on-screen joysticks aim the arms
+	local LeftJoy, RightJoy -- joystick objects {Base,Knob,Held,Vec,Input}
+	local JoyGui -- dedicated always-on-top ScreenGui that holds the joysticks
+	local JoyConns = {}
+	local EnsureJoysticks -- forward-declared; defined after MakeJoy/WireJoy
+
 	m.Config = function(parent: GuiBase2d)
 		Util_CreateSwitch(parent, "Proper Arm Control (joysticks)", ProperArms).Changed:Connect(function(v)
 			ProperArms = v
+			if v then EnsureJoysticks() end
 			if LeftJoy then LeftJoy.Base.Visible = v end
 			if RightJoy then RightJoy.Base.Visible = v end
-			Notify("Proper Arm Control = " .. tostring(v) .. " (LeftJoy=" .. tostring(LeftJoy ~= nil) .. ")")
 		end)
 	end
 
@@ -158,10 +165,6 @@ AddModule(function()
 	local Crouching = false
 	local StanceUpright = false -- [STANCE] false = original legs-in-front idle, true = legs straight down
 	local StanceLift = 0 -- [STANCE] smooth body lift while upright idle so feet aren't in the ground
-	local ProperArms = false -- [ARMS] false = M1/M2 point, true = on-screen joysticks aim the arms
-	local LeftJoy, RightJoy -- joystick objects {Base,Knob,Held,Vec,Input}
-	local JoyGui -- dedicated always-on-top ScreenGui that holds the joysticks
-	local JoyConns = {}
 	local CrouchDistance = 0
 	local TorsoRotation = CFrame.identity
 
@@ -362,7 +365,7 @@ AddModule(function()
 	end
 	-- [ARMS] Build the joysticks on demand. Called from Update (which runs whenever
 	-- the moveset is active) so they exist regardless of whether/when Init ran.
-	local function EnsureJoysticks()
+	EnsureJoysticks = function()
 		if JoyGui and JoyGui.Parent then return end
 		JoyGui = Instance.new("ScreenGui")
 		JoyGui.Name = "Uhhhhhh_ArmJoysticks"
@@ -381,6 +384,7 @@ AddModule(function()
 		RightJoy = MakeJoy(1, -90)
 		WireJoy(LeftJoy)
 		WireJoy(RightJoy)
+		Notify("Joysticks CREATED, parent=" .. tostring(JoyGui.Parent and JoyGui.Parent.ClassName or "NIL"))
 	end
 	m.Init = function(figure: Model)
 		hum = figure:FindFirstChild("Humanoid")
