@@ -5064,11 +5064,7 @@ function HatReanimator.Config(parent)
 	UI.CreateSwitch(parent, "Fast Reanim", SaveData.Reanimator.FastReanim).Changed:Connect(function(val)
 		SaveData.Reanimator.FastReanim = val
 	end)
-	UI.CreateText(parent, "fixed ~0.1s total internal delay instead of the default (faster re-reanimate)", 10, Enum.TextXAlignment.Center)
-	UI.CreateSwitch(parent, "Cheesed Hat Collide", SaveData.Reanimator.CheesedHatCollide).Changed:Connect(function(val)
-		SaveData.Reanimator.CheesedHatCollide = val
-	end)
-	UI.CreateText(parent, "kills first and reacts to the actual death event instead of a fixed pre-kill wait (skips the guess, faster)", 10, Enum.TextXAlignment.Center)
+	UI.CreateText(parent, "collapses the reanim's internal hat delays to one frame each (much faster re-reanimate; may be less reliable in some games)", 10, Enum.TextXAlignment.Center)
 	UI.CreateDropdown(parent, "respawntp", {
 		"The Void",
 		"Behind ReanimCharacter",
@@ -5987,15 +5983,6 @@ function HatReanimator.Start()
 							if i then table.remove(CharHats, i) end
 						end
 					end)
-					-- [CHEESE] record collision the instant the game grants it (event-driven),
-					-- instead of polling CanCollide at a fixed moment and possibly missing it.
-					if handle:IsA("BasePart") then
-						handle:GetPropertyChangedSignal("CanCollide"):Connect(function()
-							if SaveData.Reanimator.CheesedHatCollide and handle.CanCollide then
-								handle:SetAttribute("_Uhhhhhh_HasCollide", true)
-							end
-						end)
-					end
 				end
 			end
 		elseif v:IsA("Tool") and v.Parent == Player.Character then
@@ -6029,29 +6016,6 @@ function HatReanimator.Start()
 		HatReanimator.Status.HatCollide = exists .. " hats, " .. collidable .. " has collide."
 		return collidable
 	end
-	local function countHasCollide(hats)
-		local n = 0
-		for _,hat in hats do
-			local handle = hat:FindFirstChild("Handle")
-			if handle and handle:GetAttribute("_Uhhhhhh_HasCollide") then n += 1 end
-		end
-		return n
-	end
-	-- [CHEESE] event-driven settle: instead of a fixed 0.5s before counting collide,
-	-- proceed the moment the collide count (fed by the CanCollide listener) stops
-	-- rising — capped short — so reanimate is much faster when collide lands quickly.
-	local function cheeseSettle(hats)
-		if not SaveData.Reanimator.CheesedHatCollide then
-			return task.wait(0.5)
-		end
-		local t0 = os.clock()
-		local last, stable = -1, 0
-		repeat
-			task.wait()
-			local c = countHasCollide(hats)
-			if c == last then stable += 1 else last, stable = c, 0 end
-		until stable >= 4 or (os.clock() - t0) >= 0.35
-	end
 	local function calculatepartdestroytime(height, velocity, gravity)
 		return (velocity + math.sqrt(velocity * velocity + 2 * gravity * height)) / gravity
 	end
@@ -6084,7 +6048,7 @@ function HatReanimator.Start()
 			end
 			local head = character:FindFirstChild("Head")
 			if head then head:Destroy() end
-			cheeseSettle(hats)
+			task.wait(0.5)
 			return _counthats(hats)
 		end,
 	}
@@ -6149,7 +6113,7 @@ function HatReanimator.Start()
 			if torso then
 				torso.AncestryChanged:Wait()
 			end
-			cheeseSettle(hats)
+			task.wait(0.5)
 			return _counthats(hats)
 		end,
 	}
@@ -6217,7 +6181,7 @@ function HatReanimator.Start()
 			if torso then
 				torso.AncestryChanged:Wait()
 			end
-			cheeseSettle(hats)
+			task.wait(0.5)
 			return _counthats(hats)
 		end,
 	}
@@ -6322,7 +6286,7 @@ function HatReanimator.Start()
 			if head and head.Parent then
 				head.AncestryChanged:Wait()
 			end
-			cheeseSettle(hats)
+			task.wait(1.5)
 			return _counthats(hats)
 		end,
 	}
@@ -6396,7 +6360,7 @@ function HatReanimator.Start()
 			for _,v in hats do
 				SetAccoutrementState(v, BackendAccoutrementState.Equipped)
 			end
-			cheeseSettle(hats)
+			task.wait(1.5)
 			return _counthats(hats)
 		end,
 	}
@@ -6665,22 +6629,7 @@ function HatReanimator.Start()
 			end
 		end
 		Humanoid:ChangeState(Enum.HumanoidStateType.FallingDown)
-		if SaveData.Reanimator.CheesedHatCollide then
-			-- [CHEESE] kill immediately and react to the real Died event instead of a fixed
-			-- pre-kill wait (faster; falls back to a short timeout if Died never fires).
-			AvatarEditorService:BustAvatarFetchCache()
-			pcall(replicatesignal, Humanoid.ServerBreakJoints)
-			Humanoid.EvaluateStateMachine = true
-			Humanoid.BreakJointsOnDeath = true
-			Humanoid.Health = 0
-			local died = false
-			local dconn = Humanoid.Died:Connect(function() died = true end)
-			local t0 = os.clock()
-			repeat task.wait() until died or (os.clock() - t0) > 0.5 or not character:IsDescendantOf(workspace)
-			dconn:Disconnect()
-		else
-			fastwait(selhatcol.Wait2 or 0.15)
-		end
+		fastwait(selhatcol.Wait2 or 0.15)
 		if not character:IsDescendantOf(workspace) then
 			lgloop:Disconnect()
 			for _,c in bringconns do
@@ -6688,13 +6637,11 @@ function HatReanimator.Start()
 			end
 			return
 		end
-		if not SaveData.Reanimator.CheesedHatCollide then
-			AvatarEditorService:BustAvatarFetchCache()
-			pcall(replicatesignal, Humanoid.ServerBreakJoints)
-			Humanoid.EvaluateStateMachine = true
-			Humanoid.BreakJointsOnDeath = true
-			Humanoid.Health = 0
-		end
+		AvatarEditorService:BustAvatarFetchCache()
+		pcall(replicatesignal, Humanoid.ServerBreakJoints)
+		Humanoid.EvaluateStateMachine = true
+		Humanoid.BreakJointsOnDeath = true
+		Humanoid.Health = 0
 		Humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, true)
 		Humanoid:ChangeState(Enum.HumanoidStateType.Dead)
 		readystate = 3
