@@ -5987,6 +5987,15 @@ function HatReanimator.Start()
 							if i then table.remove(CharHats, i) end
 						end
 					end)
+					-- [CHEESE] record collision the instant the game grants it (event-driven),
+					-- instead of polling CanCollide at a fixed moment and possibly missing it.
+					if handle:IsA("BasePart") then
+						handle:GetPropertyChangedSignal("CanCollide"):Connect(function()
+							if SaveData.Reanimator.CheesedHatCollide and handle.CanCollide then
+								handle:SetAttribute("_Uhhhhhh_HasCollide", true)
+							end
+						end)
+					end
 				end
 			end
 		elseif v:IsA("Tool") and v.Parent == Player.Character then
