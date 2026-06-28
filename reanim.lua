@@ -6029,6 +6029,29 @@ function HatReanimator.Start()
 		HatReanimator.Status.HatCollide = exists .. " hats, " .. collidable .. " has collide."
 		return collidable
 	end
+	local function countHasCollide(hats)
+		local n = 0
+		for _,hat in hats do
+			local handle = hat:FindFirstChild("Handle")
+			if handle and handle:GetAttribute("_Uhhhhhh_HasCollide") then n += 1 end
+		end
+		return n
+	end
+	-- [CHEESE] event-driven settle: instead of a fixed 0.5s before counting collide,
+	-- proceed the moment the collide count (fed by the CanCollide listener) stops
+	-- rising — capped short — so reanimate is much faster when collide lands quickly.
+	local function cheeseSettle(hats)
+		if not SaveData.Reanimator.CheesedHatCollide then
+			return task.wait(0.5)
+		end
+		local t0 = os.clock()
+		local last, stable = -1, 0
+		repeat
+			task.wait()
+			local c = countHasCollide(hats)
+			if c == last then stable += 1 else last, stable = c, 0 end
+		until stable >= 4 or (os.clock() - t0) >= 0.35
+	end
 	local function calculatepartdestroytime(height, velocity, gravity)
 		return (velocity + math.sqrt(velocity * velocity + 2 * gravity * height)) / gravity
 	end
@@ -6061,7 +6084,7 @@ function HatReanimator.Start()
 			end
 			local head = character:FindFirstChild("Head")
 			if head then head:Destroy() end
-			task.wait(0.5)
+			cheeseSettle(hats)
 			return _counthats(hats)
 		end,
 	}
@@ -6126,7 +6149,7 @@ function HatReanimator.Start()
 			if torso then
 				torso.AncestryChanged:Wait()
 			end
-			task.wait(0.5)
+			cheeseSettle(hats)
 			return _counthats(hats)
 		end,
 	}
@@ -6194,7 +6217,7 @@ function HatReanimator.Start()
 			if torso then
 				torso.AncestryChanged:Wait()
 			end
-			task.wait(0.5)
+			cheeseSettle(hats)
 			return _counthats(hats)
 		end,
 	}
@@ -6299,7 +6322,7 @@ function HatReanimator.Start()
 			if head and head.Parent then
 				head.AncestryChanged:Wait()
 			end
-			task.wait(1.5)
+			cheeseSettle(hats)
 			return _counthats(hats)
 		end,
 	}
@@ -6373,7 +6396,7 @@ function HatReanimator.Start()
 			for _,v in hats do
 				SetAccoutrementState(v, BackendAccoutrementState.Equipped)
 			end
-			task.wait(1.5)
+			cheeseSettle(hats)
 			return _counthats(hats)
 		end,
 	}
