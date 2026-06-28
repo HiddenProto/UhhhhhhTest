@@ -5064,7 +5064,11 @@ function HatReanimator.Config(parent)
 	UI.CreateSwitch(parent, "Fast Reanim", SaveData.Reanimator.FastReanim).Changed:Connect(function(val)
 		SaveData.Reanimator.FastReanim = val
 	end)
-	UI.CreateText(parent, "collapses the reanim's internal hat delays to one frame each (much faster re-reanimate; may be less reliable in some games)", 10, Enum.TextXAlignment.Center)
+	UI.CreateText(parent, "fixed ~0.1s total internal delay instead of the default (faster re-reanimate)", 10, Enum.TextXAlignment.Center)
+	UI.CreateSwitch(parent, "Cheesed Hat Collide", SaveData.Reanimator.CheesedHatCollide).Changed:Connect(function(val)
+		SaveData.Reanimator.CheesedHatCollide = val
+	end)
+	UI.CreateText(parent, "kills first and reacts to the actual death event instead of a fixed pre-kill wait (skips the guess, faster)", 10, Enum.TextXAlignment.Center)
 	UI.CreateDropdown(parent, "respawntp", {
 		"The Void",
 		"Behind ReanimCharacter",
@@ -6629,7 +6633,22 @@ function HatReanimator.Start()
 			end
 		end
 		Humanoid:ChangeState(Enum.HumanoidStateType.FallingDown)
-		fastwait(selhatcol.Wait2 or 0.15)
+		if SaveData.Reanimator.CheesedHatCollide then
+			-- [CHEESE] kill immediately and react to the real Died event instead of a fixed
+			-- pre-kill wait (faster; falls back to a short timeout if Died never fires).
+			AvatarEditorService:BustAvatarFetchCache()
+			pcall(replicatesignal, Humanoid.ServerBreakJoints)
+			Humanoid.EvaluateStateMachine = true
+			Humanoid.BreakJointsOnDeath = true
+			Humanoid.Health = 0
+			local died = false
+			local dconn = Humanoid.Died:Connect(function() died = true end)
+			local t0 = os.clock()
+			repeat task.wait() until died or (os.clock() - t0) > 0.5 or not character:IsDescendantOf(workspace)
+			dconn:Disconnect()
+		else
+			fastwait(selhatcol.Wait2 or 0.15)
+		end
 		if not character:IsDescendantOf(workspace) then
 			lgloop:Disconnect()
 			for _,c in bringconns do
@@ -6637,11 +6656,13 @@ function HatReanimator.Start()
 			end
 			return
 		end
-		AvatarEditorService:BustAvatarFetchCache()
-		pcall(replicatesignal, Humanoid.ServerBreakJoints)
-		Humanoid.EvaluateStateMachine = true
-		Humanoid.BreakJointsOnDeath = true
-		Humanoid.Health = 0
+		if not SaveData.Reanimator.CheesedHatCollide then
+			AvatarEditorService:BustAvatarFetchCache()
+			pcall(replicatesignal, Humanoid.ServerBreakJoints)
+			Humanoid.EvaluateStateMachine = true
+			Humanoid.BreakJointsOnDeath = true
+			Humanoid.Health = 0
+		end
 		Humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, true)
 		Humanoid:ChangeState(Enum.HumanoidStateType.Dead)
 		readystate = 3
