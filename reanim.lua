@@ -5239,6 +5239,28 @@ function HatReanimator.Start()
 		end
 		return nil, nil
 	end
+	-- [BODY PART PRIORITY / disambiguation] when multiple worn accessories share the same
+	-- Name+Mesh+Texture (e.g. custom accessories all generically named "Accessory"), tag
+	-- each with a stable 1-based slot (order of appearance in character:GetChildren()) so
+	-- presets can target one specific instance instead of all of them at once. Returns nil
+	-- when the accessory is already unambiguous (no change to existing preset matching).
+	local function GetAccessorySlot(character, hat)
+		if not hat then return nil end
+		local mesh, tex = GetHatMeshAndTexture(hat)
+		mesh, tex = mesh or "", tex or ""
+		local n, mine = 0, nil
+		for _,v in character:GetChildren() do
+			if v:IsA("Accessory") and v.Name == hat.Name then
+				local m, t = GetHatMeshAndTexture(v)
+				if (m or "") == mesh and (t or "") == tex then
+					n += 1
+					if v == hat then mine = n end
+				end
+			end
+		end
+		if n <= 1 then return nil end
+		return mine
+	end
 	local function AssetIdMatch(a, b)
 		a = a or ""
 		b = b or ""
@@ -5657,7 +5679,7 @@ function HatReanimator.Start()
 		HatReanimator.HatMapSummary = summary
 		HatReanimator.RebuildRequired = false
 	end
-	local function GetHatMappedOverride(hatmapped)
+	local function GetHatMappedOverride(hatmapped, slotindex)
 		local ReanimCharacter = Reanimate.Character
 		if not ReanimCharacter then return end
 		local scale = ReanimCharacter:GetScale()
@@ -5694,6 +5716,9 @@ function HatReanimator.Start()
 					end
 					if data.Name then
 						oke = oke and hatmapped.Name == data.Name
+					end
+					if data.SlotIndex then
+						oke = oke and slotindex == data.SlotIndex
 					end
 					if oke then
 						if data.Compose then
@@ -7112,7 +7137,7 @@ function HatReanimator.Start()
 							else
 								local mapped = nil
 								if ref then
-									mapped = GetHatMappedOverride(ref.Map)
+									mapped = GetHatMappedOverride(ref.Map, GetAccessorySlot(character, hat))
 								else
 									RefHatToHatRefs(hat)
 								end
@@ -7153,7 +7178,7 @@ function HatReanimator.Start()
 				if ReanimOkay and ref.Hat and ref.Aligned then
 					ph.Transparency = 1
 				else
-					local tcf, _ = GetHatMappedCFrame(GetHatMappedOverride(ref.Map))
+					local tcf, _ = GetHatMappedCFrame(GetHatMappedOverride(ref.Map, GetAccessorySlot(character, ref.Hat)))
 					if tcf then
 						local lltm = ltm
 						if Reanimate.FirstPersonBody then
@@ -7179,7 +7204,7 @@ function HatReanimator.Start()
 			if ph then
 				if HatReanimator.Dropped then ph.Transparency = 1 continue end -- [DROP] hide placeholder
 				if ReanimOkay and ref.Hat and ref.Aligned then else
-					local tcf, _ = GetHatMappedCFrame(GetHatMappedOverride(ref.Map))
+					local tcf, _ = GetHatMappedCFrame(GetHatMappedOverride(ref.Map, GetAccessorySlot(character, ref.Hat)))
 					if tcf then
 						ph.CFrame = tcf
 					end
@@ -8153,7 +8178,7 @@ do
 		end
 		for _, p in SaveData.HatPresets do
 			if not p.Disabled then
-				local entry = { _UhPreset = true, Compose = true, C1 = PresetOffsetCFrame(p), Limb = p.Limb }
+				local entry = { _UhPreset = true, Compose = true, C1 = PresetOffsetCFrame(p), Limb = p.Limb, SlotIndex = p.Slot }
 				local mid, tid = NormalizeId(p.MeshId), NormalizeId(p.TextureId)
 				if mid ~= "" then
 					entry.MeshId = mid
@@ -8207,14 +8232,32 @@ do
 					table.insert(list, { Name = v.Name, MeshId = NormalizeId(mesh), TextureId = NormalizeId(tex) })
 				end
 			end
+			-- [BODY PART PRIORITY / disambiguation] tag duplicates (same Name+Mesh+Texture,
+			-- e.g. custom accessories all generically named "Accessory") with a stable
+			-- 1-based Slot so each can get its own independent preset. Order matches
+			-- character:GetChildren(), same as GetAccessorySlot() in HatReanimator.Start.
+			local total = {}
+			for _, acc in list do
+				local key = acc.Name .. "|" .. acc.MeshId .. "|" .. acc.TextureId
+				total[key] = (total[key] or 0) + 1
+			end
+			local seen = {}
+			for _, acc in list do
+				local key = acc.Name .. "|" .. acc.MeshId .. "|" .. acc.TextureId
+				if total[key] > 1 then
+					seen[key] = (seen[key] or 0) + 1
+					acc.Slot = seen[key]
+				end
+			end
 		end
 		return list
 	end
-	local function FindPreset(meshid, texid, name)
+	local function FindPreset(meshid, texid, name, slot)
 		meshid, texid = NormalizeId(meshid), NormalizeId(texid)
 		for _, p in SaveData.HatPresets do
-			if (meshid ~= "" and NormalizeId(p.MeshId) == meshid and NormalizeId(p.TextureId) == texid)
-				or (name ~= "" and p.Name == name) then
+			if ((meshid ~= "" and NormalizeId(p.MeshId) == meshid and NormalizeId(p.TextureId) == texid)
+				or (name ~= "" and p.Name == name))
+				and p.Slot == slot then
 				return p
 			end
 		end
@@ -8264,7 +8307,7 @@ do
 		end
 		if active and active.Presets then
 			for _, p in active.Presets do
-				local entry = { _UhAvatar = true, Compose = true, C1 = PresetOffsetCFrame(p), Limb = p.Limb }
+				local entry = { _UhAvatar = true, Compose = true, C1 = PresetOffsetCFrame(p), Limb = p.Limb, SlotIndex = p.Slot }
 				local mid, tid = NormalizeId(p.MeshId), NormalizeId(p.TextureId)
 				if mid ~= "" then
 					entry.MeshId = mid
@@ -8437,10 +8480,10 @@ do
 			UI.CreateText(PresetsPage, "(no accessories worn)", 11, Enum.TextXAlignment.Center)
 		end
 		for _, acc in worn do
-			UI.CreateButton(PresetsPage, "Edit: " .. acc.Name, 16).Activated:Connect(function()
-				local p = FindPreset(acc.MeshId, acc.TextureId, acc.Name)
+			UI.CreateButton(PresetsPage, "Edit: " .. acc.Name .. (acc.Slot and (" (" .. acc.Slot .. ")") or ""), 16).Activated:Connect(function()
+				local p = FindPreset(acc.MeshId, acc.TextureId, acc.Name, acc.Slot)
 				if not p then
-					p = { Name = acc.Name, MeshId = acc.MeshId, TextureId = acc.TextureId, P = {0, 0, 0}, R = {0, 0, 0}, Disabled = false }
+					p = { Name = acc.Name, MeshId = acc.MeshId, TextureId = acc.TextureId, Slot = acc.Slot, P = {0, 0, 0}, R = {0, 0, 0}, Disabled = false }
 					table.insert(SaveData.HatPresets, p)
 					pcall(ApplyHatPresets)
 				end
@@ -8453,7 +8496,7 @@ do
 			UI.CreateText(PresetsPage, "(none yet)", 11, Enum.TextXAlignment.Center)
 		end
 		for _, p in SaveData.HatPresets do
-			UI.CreateText(PresetsPage, p.Name .. (p.Disabled and "  [disabled]" or ""), 14, Enum.TextXAlignment.Left)
+			UI.CreateText(PresetsPage, p.Name .. (p.Slot and (" (" .. p.Slot .. ")") or "") .. (p.Disabled and "  [disabled]" or ""), 14, Enum.TextXAlignment.Left)
 			UI.CreateButton(PresetsPage, "Edit", 16).Activated:Connect(function() OpenPresetEditor(p) end)
 			UI.CreateSwitch(PresetsPage, "Enabled", not p.Disabled).Changed:Connect(function(v)
 				p.Disabled = not v
