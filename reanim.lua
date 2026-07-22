@@ -7137,7 +7137,7 @@ function HatReanimator.Start()
 							else
 								local mapped = nil
 								if ref then
-									mapped = GetHatMappedOverride(ref.Map, GetAccessorySlot(character, hat))
+									mapped = GetHatMappedOverride(ref.Map, GetAccessorySlot(Character, hat))
 								else
 									RefHatToHatRefs(hat)
 								end
@@ -7178,7 +7178,7 @@ function HatReanimator.Start()
 				if ReanimOkay and ref.Hat and ref.Aligned then
 					ph.Transparency = 1
 				else
-					local tcf, _ = GetHatMappedCFrame(GetHatMappedOverride(ref.Map, GetAccessorySlot(character, ref.Hat)))
+					local tcf, _ = GetHatMappedCFrame(GetHatMappedOverride(ref.Map, GetAccessorySlot(Character, ref.Hat)))
 					if tcf then
 						local lltm = ltm
 						if Reanimate.FirstPersonBody then
@@ -7204,7 +7204,7 @@ function HatReanimator.Start()
 			if ph then
 				if HatReanimator.Dropped then ph.Transparency = 1 continue end -- [DROP] hide placeholder
 				if ReanimOkay and ref.Hat and ref.Aligned then else
-					local tcf, _ = GetHatMappedCFrame(GetHatMappedOverride(ref.Map, GetAccessorySlot(character, ref.Hat)))
+					local tcf, _ = GetHatMappedCFrame(GetHatMappedOverride(ref.Map, GetAccessorySlot(Character, ref.Hat)))
 					if tcf then
 						ph.CFrame = tcf
 					end
