@@ -5003,7 +5003,6 @@ HatReanimator.Status = {
 	Permadeath = "(no status)",
 	HatCollide = "(no status)",
 	RespawnFling = "(no status)",
-	LimbDebug = "(no status)",
 }
 function HatReanimator.ShowHitboxes()
 	if Player.Character then
@@ -5239,28 +5238,6 @@ function HatReanimator.Start()
 			end
 		end
 		return nil, nil
-	end
-	-- [BODY PART PRIORITY / disambiguation] when multiple worn accessories share the same
-	-- Name+Mesh+Texture (e.g. custom accessories all generically named "Accessory"), tag
-	-- each with a stable 1-based slot (order of appearance in character:GetChildren()) so
-	-- presets can target one specific instance instead of all of them at once. Returns nil
-	-- when the accessory is already unambiguous (no change to existing preset matching).
-	local function GetAccessorySlot(character, hat)
-		if not character or not hat then return nil end
-		local mesh, tex = GetHatMeshAndTexture(hat)
-		mesh, tex = mesh or "", tex or ""
-		local n, mine = 0, nil
-		for _,v in character:GetChildren() do
-			if v:IsA("Accessory") and v.Name == hat.Name then
-				local m, t = GetHatMeshAndTexture(v)
-				if (m or "") == mesh and (t or "") == tex then
-					n += 1
-					if v == hat then mine = n end
-				end
-			end
-		end
-		if n <= 1 then return nil end
-		return mine
 	end
 	local function AssetIdMatch(a, b)
 		a = a or ""
@@ -5680,7 +5657,7 @@ function HatReanimator.Start()
 		HatReanimator.HatMapSummary = summary
 		HatReanimator.RebuildRequired = false
 	end
-	local function GetHatMappedOverride(hatmapped, slotindex)
+	local function GetHatMappedOverride(hatmapped)
 		local ReanimCharacter = Reanimate.Character
 		if not ReanimCharacter then return end
 		local scale = ReanimCharacter:GetScale()
@@ -5717,9 +5694,6 @@ function HatReanimator.Start()
 					end
 					if data.Name then
 						oke = oke and hatmapped.Name == data.Name
-					end
-					if data.SlotIndex then
-						oke = oke and slotindex == data.SlotIndex
 					end
 					if oke then
 						if data.Compose then
@@ -7078,7 +7052,6 @@ function HatReanimator.Start()
 					end
 				end
 				debug.profilebegin("Uhhhhhh > Alignments")
-				local limbdebug = {}
 				for _,hat in CharHats do
 					local handle = hat:FindFirstChild("Handle")
 					if handle and handle:IsA("BasePart") then
@@ -7139,19 +7112,7 @@ function HatReanimator.Start()
 							else
 								local mapped = nil
 								if ref then
-									local slotindex = GetAccessorySlot(Character, hat)
-									mapped = GetHatMappedOverride(ref.Map, slotindex)
-									table.insert(limbdebug, hat.Name .. (slotindex and (" (" .. slotindex .. ")") or "") .. " -> " .. tostring(mapped and mapped.Limb) .. (mapped == ref.Map and " [auto]" or " [preset]"))
-									if mapped and mapped == ref.Map and mapped.Limb and HatReanimator.FindLimbConflict then
-										-- [BODY PART PRIORITY] fully Auto (mapped == ref.Map means
-										-- nothing -- not even a plain position tweak -- overrides
-										-- this accessory). If something else explicitly claimed its
-										-- natural limb, fall back to the same catch-all used for
-										-- unrecognized accessories instead of overlapping the claim.
-										if HatReanimator.FindLimbConflict(nil, mapped.Limb) then
-											mapped = { C0 = mapped.C0, C1 = mapped.C1, Offset = mapped.Offset, Limb = "HumanoidRootPart", RepRootPart = mapped.RepRootPart, Scale = mapped.Scale }
-										end
-									end
+									mapped = GetHatMappedOverride(ref.Map)
 								else
 									RefHatToHatRefs(hat)
 								end
@@ -7176,7 +7137,6 @@ function HatReanimator.Start()
 						end
 					end
 				end
-				HatReanimator.Status.LimbDebug = #limbdebug > 0 and table.concat(limbdebug, "\n") or "(no hats aligned this frame)"
 				debug.profileend()
 			end
 		else
@@ -7193,7 +7153,7 @@ function HatReanimator.Start()
 				if ReanimOkay and ref.Hat and ref.Aligned then
 					ph.Transparency = 1
 				else
-					local tcf, _ = GetHatMappedCFrame(GetHatMappedOverride(ref.Map, GetAccessorySlot(Character, ref.Hat)))
+					local tcf, _ = GetHatMappedCFrame(GetHatMappedOverride(ref.Map))
 					if tcf then
 						local lltm = ltm
 						if Reanimate.FirstPersonBody then
@@ -7219,7 +7179,7 @@ function HatReanimator.Start()
 			if ph then
 				if HatReanimator.Dropped then ph.Transparency = 1 continue end -- [DROP] hide placeholder
 				if ReanimOkay and ref.Hat and ref.Aligned then else
-					local tcf, _ = GetHatMappedCFrame(GetHatMappedOverride(ref.Map, GetAccessorySlot(Character, ref.Hat)))
+					local tcf, _ = GetHatMappedCFrame(GetHatMappedOverride(ref.Map))
 					if tcf then
 						ph.CFrame = tcf
 					end
@@ -8156,16 +8116,6 @@ do
 		return CFrame.new(p.P[1], p.P[2], p.P[3])
 			* CFrame.Angles(math.rad(p.R[1]), math.rad(p.R[2]), math.rad(p.R[3]))
 	end
-	-- Opening the editor on an accessory always creates a preset for it (even with
-	-- nothing changed), so "a preset entry exists" != "the user actually customized this."
-	-- A blank one (no Limb, zero position/rotation) should behave exactly like no preset
-	-- at all -- both for what applies visually and for what counts as "Auto" elsewhere
-	-- (e.g. the conflict-redirect only treats an accessory as untouched via this check).
-	local function IsNoopPreset(p)
-		return not p.Limb
-			and p.P[1] == 0 and p.P[2] == 0 and p.P[3] == 0
-			and p.R[1] == 0 and p.R[2] == 0 and p.R[3] == 0
-	end
 	-- [BODY PART PRIORITY] force an accessory onto a specific limb instead of its
 	-- auto-detected one. Index 1 = auto (no override, use the hat map's own limb).
 	local BodyPartOptions = {"Auto (default)", "Head", "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg", "Root (waist)"}
@@ -8202,13 +8152,8 @@ do
 			if ov[i]._UhPreset then table.remove(ov, i) end
 		end
 		for _, p in SaveData.HatPresets do
-			-- [PROFILE SCOPING] a preset with an explicit Body Part Priority (p.Limb) only
-			-- takes effect while it's part of a matched, active Avatar Config (see
-			-- ApplyAvatarConfigs below) -- it's excluded here so it doesn't force a limb
-			-- globally just for wearing the accessory in any outfit. Plain position/rotation
-			-- presets (no Limb override) still apply everywhere, as before.
-			if not p.Disabled and not p.Limb and not IsNoopPreset(p) then
-				local entry = { _UhPreset = true, Compose = true, C1 = PresetOffsetCFrame(p), SlotIndex = p.Slot }
+			if not p.Disabled then
+				local entry = { _UhPreset = true, Compose = true, C1 = PresetOffsetCFrame(p), Limb = p.Limb }
 				local mid, tid = NormalizeId(p.MeshId), NormalizeId(p.TextureId)
 				if mid ~= "" then
 					entry.MeshId = mid
@@ -8259,65 +8204,22 @@ do
 							if sm then mesh, tex = sm.MeshId, sm.TextureId end
 						end
 					end
-					table.insert(list, { Name = v.Name, MeshId = NormalizeId(mesh), TextureId = NormalizeId(tex), HandleClass = handle and handle.ClassName or "(no Handle)" })
-				end
-			end
-			-- [BODY PART PRIORITY / disambiguation] tag duplicates (same Name+Mesh+Texture,
-			-- e.g. custom accessories all generically named "Accessory") with a stable
-			-- 1-based Slot so each can get its own independent preset. Order matches
-			-- character:GetChildren(), same as GetAccessorySlot() in HatReanimator.Start.
-			local total = {}
-			for _, acc in list do
-				local key = acc.Name .. "|" .. acc.MeshId .. "|" .. acc.TextureId
-				total[key] = (total[key] or 0) + 1
-			end
-			local seen = {}
-			for _, acc in list do
-				local key = acc.Name .. "|" .. acc.MeshId .. "|" .. acc.TextureId
-				if total[key] > 1 then
-					seen[key] = (seen[key] or 0) + 1
-					acc.Slot = seen[key]
+					table.insert(list, { Name = v.Name, MeshId = NormalizeId(mesh), TextureId = NormalizeId(tex) })
 				end
 			end
 		end
 		return list
 	end
-	local function FindPreset(meshid, texid, name, slot)
+	local function FindPreset(meshid, texid, name)
 		meshid, texid = NormalizeId(meshid), NormalizeId(texid)
 		for _, p in SaveData.HatPresets do
-			local pmesh = NormalizeId(p.MeshId)
-			-- mutually exclusive, same as ApplyHatPresets/GetHatMappedOverride: match by
-			-- mesh when we have one, only fall back to Name when neither side has a mesh.
-			-- (previously this was an OR, so a different-mesh accessory sharing the same
-			-- generic Name as an existing preset would wrongly reuse that preset instead
-			-- of getting its own.)
-			local matches
-			if meshid ~= "" then
-				matches = pmesh == meshid and NormalizeId(p.TextureId) == texid
-			else
-				matches = pmesh == "" and name ~= "" and p.Name == name
-			end
-			if matches and p.Slot == slot then
+			if (meshid ~= "" and NormalizeId(p.MeshId) == meshid and NormalizeId(p.TextureId) == texid)
+				or (name ~= "" and p.Name == name) then
 				return p
 			end
 		end
 		return nil
 	end
-	-- [BODY PART PRIORITY] only one Limb-flagged ("this is a limb accessory") preset may
-	-- claim a given body part at a time -- a "regular" accessory (no Limb override, just
-	-- riding its auto-detected placement) never conflicts, since it isn't flagged at all.
-	local function FindLimbConflict(preset, newlimb)
-		if not newlimb then return nil end
-		for _, p in SaveData.HatPresets do
-			if p ~= preset and not p.Disabled and p.Limb == newlimb then
-				return p
-			end
-		end
-		return nil
-	end
-	-- exposed so HatReanimator.Start's runtime loop (a separate scope) can reuse the exact
-	-- same conflict rule for Auto accessories, instead of duplicating the logic.
-	HatReanimator.FindLimbConflict = FindLimbConflict
 
 	-- [AVATAR CONFIGS] A config is "matched" when every accessory it requires is
 	-- currently worn. The first enabled+matched config applies its scale + presets.
@@ -8361,33 +8263,16 @@ do
 			if ov[i]._UhAvatar then table.remove(ov, i) end
 		end
 		if active and active.Presets then
-			-- [BODY PART PRIORITY] safety net: the editor guard (FindLimbConflict) stops
-			-- you from *creating* two Limb claims on the same body part, but can't fix
-			-- conflicting data that already existed (e.g. saved before the guard existed).
-			-- If that happens anyway, only the first claim in this config wins per limb --
-			-- the loser keeps its position/rotation but falls back to its own natural limb
-			-- instead of forcing the contested one, so nothing silently deletes the data,
-			-- and no two accessories fight over the same body part.
-			local claimedLimbs = {}
 			for _, p in active.Presets do
-				if not IsNoopPreset(p) then
-					local entry = { _UhAvatar = true, Compose = true, C1 = PresetOffsetCFrame(p), Limb = p.Limb, SlotIndex = p.Slot }
-					if entry.Limb then
-						if claimedLimbs[entry.Limb] then
-							entry.Limb = nil
-						else
-							claimedLimbs[entry.Limb] = true
-						end
-					end
-					local mid, tid = NormalizeId(p.MeshId), NormalizeId(p.TextureId)
-					if mid ~= "" then
-						entry.MeshId = mid
-						if tid ~= "" then entry.TextureId = tid end
-					else
-						entry.Name = p.Name
-					end
-					table.insert(ov, 1, entry)
+				local entry = { _UhAvatar = true, Compose = true, C1 = PresetOffsetCFrame(p), Limb = p.Limb }
+				local mid, tid = NormalizeId(p.MeshId), NormalizeId(p.TextureId)
+				if mid ~= "" then
+					entry.MeshId = mid
+					if tid ~= "" then entry.TextureId = tid end
+				else
+					entry.Name = p.Name
 				end
+				table.insert(ov, 1, entry)
 			end
 		end
 		return active
@@ -8491,34 +8376,17 @@ do
 		UI.CreateButton(page, " &lt; Back", 20).Activated:Connect(function() slideOutAnd(RefreshPresetsPage) end)
 		UI.CreateSeparator(page)
 		UI.CreateText(page, preset.Name, 20, Enum.TextXAlignment.Left)
-		local enabledSwitch = UI.CreateSwitch(page, "Enabled", not preset.Disabled)
-		enabledSwitch.Changed:Connect(function(v)
-			if v and preset.Limb then
-				local conflict = FindLimbConflict(preset, preset.Limb)
-				if conflict then
-					Util.UINotify((conflict.Name or "Another accessory") .. (conflict.Slot and (" (" .. conflict.Slot .. ")") or "") .. " already claims " .. tostring(preset.Limb) .. " -- disable that one first")
-					enabledSwitch.Value = false
-					return
-				end
-			end
+		UI.CreateSwitch(page, "Enabled", not preset.Disabled).Changed:Connect(function(v)
 			preset.Disabled = not v
 			pcall(ApplyHatPresets)
 		end)
 		UI.CreateSeparator(page)
 		UI.CreateText(page, "* Body Part Priority *", 14, Enum.TextXAlignment.Center)
-		local attachDropdown = UI.CreateDropdown(page, "Attach To", BodyPartOptions, LimbToBodyPartOption(preset.Limb))
-		attachDropdown.Changed:Connect(function(val)
-			local newlimb = BodyPartOptionToLimb(val)
-			local conflict = FindLimbConflict(preset, newlimb)
-			if conflict then
-				Util.UINotify((conflict.Name or "Another accessory") .. (conflict.Slot and (" (" .. conflict.Slot .. ")") or "") .. " already claims " .. tostring(newlimb) .. " -- change that one first")
-				attachDropdown.Value = LimbToBodyPartOption(preset.Limb)
-				return
-			end
-			preset.Limb = newlimb
+		UI.CreateDropdown(page, "Attach To", BodyPartOptions, LimbToBodyPartOption(preset.Limb)).Changed:Connect(function(val)
+			preset.Limb = BodyPartOptionToLimb(val)
 			pcall(ApplyHatPresets)
 		end)
-		UI.CreateText(page, "forces this accessory onto the chosen body part instead of its auto-detected one; re-tweak Position/Orientation below after changing this. Only takes effect once an Avatar Config (profile) below includes this preset -- save/update one after setting this, or it won't apply while just worn on its own", 10, Enum.TextXAlignment.Center)
+		UI.CreateText(page, "forces this accessory onto the chosen body part instead of its auto-detected one; re-tweak Position/Orientation below after changing this", 10, Enum.TextXAlignment.Center)
 		UI.CreateSeparator(page)
 		UI.CreateText(page, "* Position (studs) *", 14, Enum.TextXAlignment.Center)
 		local axes = {"X", "Y", "Z"}
@@ -8568,14 +8436,11 @@ do
 		if #worn == 0 then
 			UI.CreateText(PresetsPage, "(no accessories worn)", 11, Enum.TextXAlignment.Center)
 		end
-		UI.CreateText(PresetsPage, "(" .. #worn .. " Accessory instance(s) found under your character)", 10, Enum.TextXAlignment.Center)
 		for _, acc in worn do
-			local mid = acc.MeshId ~= "" and acc.MeshId or "(no mesh)"
-			UI.CreateText(PresetsPage, "  " .. acc.HandleClass .. " | mesh:" .. mid, 9, Enum.TextXAlignment.Left)
-			UI.CreateButton(PresetsPage, "Edit: " .. acc.Name .. (acc.Slot and (" (" .. acc.Slot .. ")") or ""), 16).Activated:Connect(function()
-				local p = FindPreset(acc.MeshId, acc.TextureId, acc.Name, acc.Slot)
+			UI.CreateButton(PresetsPage, "Edit: " .. acc.Name, 16).Activated:Connect(function()
+				local p = FindPreset(acc.MeshId, acc.TextureId, acc.Name)
 				if not p then
-					p = { Name = acc.Name, MeshId = acc.MeshId, TextureId = acc.TextureId, Slot = acc.Slot, P = {0, 0, 0}, R = {0, 0, 0}, Disabled = false }
+					p = { Name = acc.Name, MeshId = acc.MeshId, TextureId = acc.TextureId, P = {0, 0, 0}, R = {0, 0, 0}, Disabled = false }
 					table.insert(SaveData.HatPresets, p)
 					pcall(ApplyHatPresets)
 				end
@@ -8588,18 +8453,9 @@ do
 			UI.CreateText(PresetsPage, "(none yet)", 11, Enum.TextXAlignment.Center)
 		end
 		for _, p in SaveData.HatPresets do
-			UI.CreateText(PresetsPage, p.Name .. (p.Slot and (" (" .. p.Slot .. ")") or "") .. (p.Disabled and "  [disabled]" or ""), 14, Enum.TextXAlignment.Left)
+			UI.CreateText(PresetsPage, p.Name .. (p.Disabled and "  [disabled]" or ""), 14, Enum.TextXAlignment.Left)
 			UI.CreateButton(PresetsPage, "Edit", 16).Activated:Connect(function() OpenPresetEditor(p) end)
-			local savedEnabledSwitch = UI.CreateSwitch(PresetsPage, "Enabled", not p.Disabled)
-			savedEnabledSwitch.Changed:Connect(function(v)
-				if v and p.Limb then
-					local conflict = FindLimbConflict(p, p.Limb)
-					if conflict then
-						Util.UINotify((conflict.Name or "Another accessory") .. (conflict.Slot and (" (" .. conflict.Slot .. ")") or "") .. " already claims " .. tostring(p.Limb) .. " -- disable that one first")
-						savedEnabledSwitch.Value = false
-						return
-					end
-				end
+			UI.CreateSwitch(PresetsPage, "Enabled", not p.Disabled).Changed:Connect(function(v)
 				p.Disabled = not v
 				pcall(ApplyHatPresets)
 			end)
