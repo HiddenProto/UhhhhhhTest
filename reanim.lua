@@ -8229,7 +8229,7 @@ do
 							if sm then mesh, tex = sm.MeshId, sm.TextureId end
 						end
 					end
-					table.insert(list, { Name = v.Name, MeshId = NormalizeId(mesh), TextureId = NormalizeId(tex) })
+					table.insert(list, { Name = v.Name, MeshId = NormalizeId(mesh), TextureId = NormalizeId(tex), HandleClass = handle and handle.ClassName or "(no Handle)" })
 				end
 			end
 			-- [BODY PART PRIORITY / disambiguation] tag duplicates (same Name+Mesh+Texture,
@@ -8479,7 +8479,10 @@ do
 		if #worn == 0 then
 			UI.CreateText(PresetsPage, "(no accessories worn)", 11, Enum.TextXAlignment.Center)
 		end
+		UI.CreateText(PresetsPage, "(" .. #worn .. " Accessory instance(s) found under your character)", 10, Enum.TextXAlignment.Center)
 		for _, acc in worn do
+			local mid = acc.MeshId ~= "" and acc.MeshId or "(no mesh)"
+			UI.CreateText(PresetsPage, "  " .. acc.HandleClass .. " | mesh:" .. mid, 9, Enum.TextXAlignment.Left)
 			UI.CreateButton(PresetsPage, "Edit: " .. acc.Name .. (acc.Slot and (" (" .. acc.Slot .. ")") or ""), 16).Activated:Connect(function()
 				local p = FindPreset(acc.MeshId, acc.TextureId, acc.Name, acc.Slot)
 				if not p then
