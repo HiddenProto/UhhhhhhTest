@@ -7138,6 +7138,16 @@ function HatReanimator.Start()
 								local mapped = nil
 								if ref then
 									mapped = GetHatMappedOverride(ref.Map, GetAccessorySlot(Character, hat))
+									if mapped and mapped == ref.Map and mapped.Limb and HatReanimator.FindLimbConflict then
+										-- [BODY PART PRIORITY] fully Auto (mapped == ref.Map means
+										-- nothing -- not even a plain position tweak -- overrides
+										-- this accessory). If something else explicitly claimed its
+										-- natural limb, fall back to the same catch-all used for
+										-- unrecognized accessories instead of overlapping the claim.
+										if HatReanimator.FindLimbConflict(nil, mapped.Limb) then
+											mapped = { C0 = mapped.C0, C1 = mapped.C1, Offset = mapped.Offset, Limb = "HumanoidRootPart", RepRootPart = mapped.RepRootPart, Scale = mapped.Scale }
+										end
+									end
 								else
 									RefHatToHatRefs(hat)
 								end
@@ -8290,6 +8300,9 @@ do
 		end
 		return nil
 	end
+	-- exposed so HatReanimator.Start's runtime loop (a separate scope) can reuse the exact
+	-- same conflict rule for Auto accessories, instead of duplicating the logic.
+	HatReanimator.FindLimbConflict = FindLimbConflict
 
 	-- [AVATAR CONFIGS] A config is "matched" when every accessory it requires is
 	-- currently worn. The first enabled+matched config applies its scale + presets.
