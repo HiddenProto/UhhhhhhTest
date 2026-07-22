@@ -5245,7 +5245,7 @@ function HatReanimator.Start()
 	-- presets can target one specific instance instead of all of them at once. Returns nil
 	-- when the accessory is already unambiguous (no change to existing preset matching).
 	local function GetAccessorySlot(character, hat)
-		if not hat then return nil end
+		if not character or not hat then return nil end
 		local mesh, tex = GetHatMeshAndTexture(hat)
 		mesh, tex = mesh or "", tex or ""
 		local n, mine = 0, nil
