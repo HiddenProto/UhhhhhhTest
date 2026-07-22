@@ -4958,6 +4958,7 @@ SaveData.Reanimator.HatsSpin = not not SaveData.Reanimator.HatsSpin
 SaveData.Reanimator.HatsFlingMethod = SaveData.Reanimator.HatsFlingMethod or 1
 SaveData.Reanimator.NoToolHolding = not not SaveData.Reanimator.NoToolHolding
 SaveData.Reanimator.HatsToolAnim = SaveData.Reanimator.HatsToolAnim or 0
+SaveData.Reanimator.HatsSubZeroDelay = not not SaveData.Reanimator.HatsSubZeroDelay
 HatReanimator.HatCollide = SaveData.Reanimator.HatsCollide
 HatReanimator.HatCollideMethod = SaveData.Reanimator.HatsCollideMethod
 -- 0 - shownape's method
@@ -4988,6 +4989,10 @@ HatReanimator.ToolHolding = not SaveData.Reanimator.NoToolHolding
 HatReanimator.ToolAnimMethod = SaveData.Reanimator.HatsToolAnim
 -- 0 - nothing
 -- 1 - sword
+HatReanimator.SubZeroDelay = SaveData.Reanimator.HatsSubZeroDelay
+-- glues aligned accessory handles to RootPart's PhysicsRepRootPart every frame (not just
+-- during fling) so their replication rides RootPart's already-established stream instead
+-- of getting its own interpolation delay. Requires Reanimate.UsePhysicsRepRootPart.
 HatReanimator.UseNaNFling = true
 HatReanimator.HasPermadeath = false
 HatReanimator.HasHatCollide = false
@@ -5065,6 +5070,11 @@ function HatReanimator.Config(parent)
 		SaveData.Reanimator.FastReanim = val
 	end)
 	UI.CreateText(parent, "collapses the reanim's internal hat delays to one frame each (much faster re-reanimate; may be less reliable in some games)", 10, Enum.TextXAlignment.Center)
+	UI.CreateSwitch(parent, "Sub 0 Delay", HatReanimator.SubZeroDelay).Changed:Connect(function(val)
+		HatReanimator.SubZeroDelay = val
+		SaveData.Reanimator.HatsSubZeroDelay = val
+	end)
+	UI.CreateText(parent, "glues aligned accessories to RootPart's physics replication every frame instead of just during flings, so they don't lag behind on other clients. needs Physics Glue (Internals Settings) on", 10, Enum.TextXAlignment.Center)
 	UI.CreateDropdown(parent, "respawntp", {
 		"The Void",
 		"Behind ReanimCharacter",
@@ -7114,7 +7124,8 @@ function HatReanimator.Start()
 									table.insert(slocked, handle)
 								end
 								if ref then ref.Aligned = aligned end
-								pcall(sethiddenproperty, handle, "PhysicsRepRootPart", mapped and mapped.RepRootPart)
+								local subzerotarget = (mapped and mapped.RepRootPart) or (Reanimate.UsePhysicsRepRootPart and HatReanimator.SubZeroDelay and RootPart) or nil
+								pcall(sethiddenproperty, handle, "PhysicsRepRootPart", subzerotarget)
 							end
 						end
 					end
