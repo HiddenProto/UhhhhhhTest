@@ -5003,6 +5003,7 @@ HatReanimator.Status = {
 	Permadeath = "(no status)",
 	HatCollide = "(no status)",
 	RespawnFling = "(no status)",
+	LimbDebug = "(no status)",
 }
 function HatReanimator.ShowHitboxes()
 	if Player.Character then
@@ -7077,6 +7078,7 @@ function HatReanimator.Start()
 					end
 				end
 				debug.profilebegin("Uhhhhhh > Alignments")
+				local limbdebug = {}
 				for _,hat in CharHats do
 					local handle = hat:FindFirstChild("Handle")
 					if handle and handle:IsA("BasePart") then
@@ -7137,7 +7139,9 @@ function HatReanimator.Start()
 							else
 								local mapped = nil
 								if ref then
-									mapped = GetHatMappedOverride(ref.Map, GetAccessorySlot(Character, hat))
+									local slotindex = GetAccessorySlot(Character, hat)
+									mapped = GetHatMappedOverride(ref.Map, slotindex)
+									table.insert(limbdebug, hat.Name .. (slotindex and (" (" .. slotindex .. ")") or "") .. " -> " .. tostring(mapped and mapped.Limb) .. (mapped == ref.Map and " [auto]" or " [preset]"))
 									if mapped and mapped == ref.Map and mapped.Limb and HatReanimator.FindLimbConflict then
 										-- [BODY PART PRIORITY] fully Auto (mapped == ref.Map means
 										-- nothing -- not even a plain position tweak -- overrides
@@ -7172,6 +7176,7 @@ function HatReanimator.Start()
 						end
 					end
 				end
+				HatReanimator.Status.LimbDebug = #limbdebug > 0 and table.concat(limbdebug, "\n") or "(no hats aligned this frame)"
 				debug.profileend()
 			end
 		else
