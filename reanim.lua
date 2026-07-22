@@ -8351,8 +8351,23 @@ do
 			if ov[i]._UhAvatar then table.remove(ov, i) end
 		end
 		if active and active.Presets then
+			-- [BODY PART PRIORITY] safety net: the editor guard (FindLimbConflict) stops
+			-- you from *creating* two Limb claims on the same body part, but can't fix
+			-- conflicting data that already existed (e.g. saved before the guard existed).
+			-- If that happens anyway, only the first claim in this config wins per limb --
+			-- the loser keeps its position/rotation but falls back to its own natural limb
+			-- instead of forcing the contested one, so nothing silently deletes the data,
+			-- and no two accessories fight over the same body part.
+			local claimedLimbs = {}
 			for _, p in active.Presets do
 				local entry = { _UhAvatar = true, Compose = true, C1 = PresetOffsetCFrame(p), Limb = p.Limb, SlotIndex = p.Slot }
+				if entry.Limb then
+					if claimedLimbs[entry.Limb] then
+						entry.Limb = nil
+					else
+						claimedLimbs[entry.Limb] = true
+					end
+				end
 				local mid, tid = NormalizeId(p.MeshId), NormalizeId(p.TextureId)
 				if mid ~= "" then
 					entry.MeshId = mid
