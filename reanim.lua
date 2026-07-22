@@ -4752,15 +4752,15 @@ function LimbReanimator.Start()
 		if not RootPart:IsGrounded() then
 			if flingtarget then
 				if LimbReanimator.UseNaNFling then
-					RootPart.CFrame = CFrame.new(flingcf.Position + Vector3.new(0, 0, math.random(0, 1) * 0.005)) * CFrame.Angles(0, os.clock() * 15, 0)
+					RootPart.CFrame = CFrame.new(flingcf.Position) * CFrame.Angles(0, os.clock() * 15, 0)
 					RootPart.Velocity, RootPart.RotVelocity = Vector3.zero, Vector3.zero
 				else
-					RootPart.CFrame = flingcf + Vector3.new(0, 0, math.random(0, 1) * 0.005)
+					RootPart.CFrame = flingcf
 					RootPart.Velocity, RootPart.RotVelocity = Vector3.new(0, -16384, 0), Vector3.one * 16384
 				end
 				pcall(sethiddenproperty, RootPart, "PhysicsRepRootPart", Reanimate.UsePhysicsRepRootPart and Util.PredictionFlingPart(flingtarget.Target) or nil)
 			else
-				RootPart.CFrame = rootcf + Vector3.new(0, 0, math.random(0, 1) * 0.005)
+				RootPart.CFrame = rootcf
 				RootPart.Velocity, RootPart.RotVelocity = rootvel, Vector3.zero
 				pcall(sethiddenproperty, RootPart, "PhysicsRepRootPart", nil)
 			end
@@ -6543,10 +6543,10 @@ function HatReanimator.Start()
 			if flingtarget then
 				if not RootPart:IsGrounded() then
 					if LimbReanimator.UseNaNFling then
-						RootPart.CFrame = CFrame.new(flingcf.Position + Vector3.new(0, 0, math.random(0, 1) * 0.005)) * CFrame.Angles(0, os.clock() * 15, 0)
+						RootPart.CFrame = CFrame.new(flingcf.Position) * CFrame.Angles(0, os.clock() * 15, 0)
 						RootPart.Velocity, RootPart.RotVelocity = Vector3.zero, Vector3.zero
 					else
-						RootPart.CFrame = flingcf + Vector3.new(0, 0, math.random(0, 1) * 0.005)
+						RootPart.CFrame = flingcf
 						RootPart.Velocity, RootPart.RotVelocity = Vector3.new(0, -16384, 0), Vector3.one * 16384
 					end
 					pcall(sethiddenproperty, RootPart, "PhysicsRepRootPart", Reanimate.UsePhysicsRepRootPart and Util.PredictionFlingPart(flingtarget.Target) or nil)
