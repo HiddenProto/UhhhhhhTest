@@ -8116,22 +8116,6 @@ do
 		return CFrame.new(p.P[1], p.P[2], p.P[3])
 			* CFrame.Angles(math.rad(p.R[1]), math.rad(p.R[2]), math.rad(p.R[3]))
 	end
-	-- [BODY PART PRIORITY] force an accessory onto a specific limb instead of its
-	-- auto-detected one. Index 1 = auto (no override, use the hat map's own limb).
-	local BodyPartOptions = {"Auto (default)", "Head", "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg", "Root (waist)"}
-	local function BodyPartOptionToLimb(idx)
-		if idx <= 1 then return nil end
-		if idx == 8 then return "HumanoidRootPart" end
-		return BodyPartOptions[idx]
-	end
-	local function LimbToBodyPartOption(limb)
-		if not limb or limb == "" then return 1 end
-		if limb == "HumanoidRootPart" then return 8 end
-		for i, name in BodyPartOptions do
-			if name == limb then return i end
-		end
-		return 1
-	end
 	-- Normalize an asset id the same way the engine's AssetIdMatch does, so our
 	-- stored ids actually match (it normalizes the accessory side but compares it
 	-- to our value verbatim — so we must store the bare numeric id).
@@ -8153,7 +8137,7 @@ do
 		end
 		for _, p in SaveData.HatPresets do
 			if not p.Disabled then
-				local entry = { _UhPreset = true, Compose = true, C1 = PresetOffsetCFrame(p), Limb = p.Limb }
+				local entry = { _UhPreset = true, Compose = true, C1 = PresetOffsetCFrame(p) }
 				local mid, tid = NormalizeId(p.MeshId), NormalizeId(p.TextureId)
 				if mid ~= "" then
 					entry.MeshId = mid
@@ -8213,19 +8197,8 @@ do
 	local function FindPreset(meshid, texid, name)
 		meshid, texid = NormalizeId(meshid), NormalizeId(texid)
 		for _, p in SaveData.HatPresets do
-			local pmesh = NormalizeId(p.MeshId)
-			-- mutually exclusive: match by mesh whenever the accessory has one, only fall
-			-- back to Name when neither side has a mesh. (An unconditional OR here would
-			-- let a different-mesh accessory sharing the same generic Name, e.g. "Accessory",
-			-- wrongly reuse another accessory's preset via the Name clause even when the
-			-- MeshId clause correctly failed.)
-			local matches
-			if meshid ~= "" then
-				matches = pmesh == meshid and NormalizeId(p.TextureId) == texid
-			else
-				matches = pmesh == "" and name ~= "" and p.Name == name
-			end
-			if matches then
+			if (meshid ~= "" and NormalizeId(p.MeshId) == meshid and NormalizeId(p.TextureId) == texid)
+				or (name ~= "" and p.Name == name) then
 				return p
 			end
 		end
@@ -8275,7 +8248,7 @@ do
 		end
 		if active and active.Presets then
 			for _, p in active.Presets do
-				local entry = { _UhAvatar = true, Compose = true, C1 = PresetOffsetCFrame(p), Limb = p.Limb }
+				local entry = { _UhAvatar = true, Compose = true, C1 = PresetOffsetCFrame(p) }
 				local mid, tid = NormalizeId(p.MeshId), NormalizeId(p.TextureId)
 				if mid ~= "" then
 					entry.MeshId = mid
@@ -8391,13 +8364,6 @@ do
 			preset.Disabled = not v
 			pcall(ApplyHatPresets)
 		end)
-		UI.CreateSeparator(page)
-		UI.CreateText(page, "* Body Part Priority *", 14, Enum.TextXAlignment.Center)
-		UI.CreateDropdown(page, "Attach To", BodyPartOptions, LimbToBodyPartOption(preset.Limb)).Changed:Connect(function(val)
-			preset.Limb = BodyPartOptionToLimb(val)
-			pcall(ApplyHatPresets)
-		end)
-		UI.CreateText(page, "forces this accessory onto the chosen body part instead of its auto-detected one; re-tweak Position/Orientation below after changing this", 10, Enum.TextXAlignment.Center)
 		UI.CreateSeparator(page)
 		UI.CreateText(page, "* Position (studs) *", 14, Enum.TextXAlignment.Center)
 		local axes = {"X", "Y", "Z"}
