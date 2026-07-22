@@ -8213,8 +8213,19 @@ do
 	local function FindPreset(meshid, texid, name)
 		meshid, texid = NormalizeId(meshid), NormalizeId(texid)
 		for _, p in SaveData.HatPresets do
-			if (meshid ~= "" and NormalizeId(p.MeshId) == meshid and NormalizeId(p.TextureId) == texid)
-				or (name ~= "" and p.Name == name) then
+			local pmesh = NormalizeId(p.MeshId)
+			-- mutually exclusive: match by mesh whenever the accessory has one, only fall
+			-- back to Name when neither side has a mesh. (An unconditional OR here would
+			-- let a different-mesh accessory sharing the same generic Name, e.g. "Accessory",
+			-- wrongly reuse another accessory's preset via the Name clause even when the
+			-- MeshId clause correctly failed.)
+			local matches
+			if meshid ~= "" then
+				matches = pmesh == meshid and NormalizeId(p.TextureId) == texid
+			else
+				matches = pmesh == "" and name ~= "" and p.Name == name
+			end
+			if matches then
 				return p
 			end
 		end
