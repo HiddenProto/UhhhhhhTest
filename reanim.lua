@@ -8156,6 +8156,16 @@ do
 		return CFrame.new(p.P[1], p.P[2], p.P[3])
 			* CFrame.Angles(math.rad(p.R[1]), math.rad(p.R[2]), math.rad(p.R[3]))
 	end
+	-- Opening the editor on an accessory always creates a preset for it (even with
+	-- nothing changed), so "a preset entry exists" != "the user actually customized this."
+	-- A blank one (no Limb, zero position/rotation) should behave exactly like no preset
+	-- at all -- both for what applies visually and for what counts as "Auto" elsewhere
+	-- (e.g. the conflict-redirect only treats an accessory as untouched via this check).
+	local function IsNoopPreset(p)
+		return not p.Limb
+			and p.P[1] == 0 and p.P[2] == 0 and p.P[3] == 0
+			and p.R[1] == 0 and p.R[2] == 0 and p.R[3] == 0
+	end
 	-- [BODY PART PRIORITY] force an accessory onto a specific limb instead of its
 	-- auto-detected one. Index 1 = auto (no override, use the hat map's own limb).
 	local BodyPartOptions = {"Auto (default)", "Head", "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg", "Root (waist)"}
@@ -8197,7 +8207,7 @@ do
 			-- ApplyAvatarConfigs below) -- it's excluded here so it doesn't force a limb
 			-- globally just for wearing the accessory in any outfit. Plain position/rotation
 			-- presets (no Limb override) still apply everywhere, as before.
-			if not p.Disabled and not p.Limb then
+			if not p.Disabled and not p.Limb and not IsNoopPreset(p) then
 				local entry = { _UhPreset = true, Compose = true, C1 = PresetOffsetCFrame(p), SlotIndex = p.Slot }
 				local mid, tid = NormalizeId(p.MeshId), NormalizeId(p.TextureId)
 				if mid ~= "" then
@@ -8360,22 +8370,24 @@ do
 			-- and no two accessories fight over the same body part.
 			local claimedLimbs = {}
 			for _, p in active.Presets do
-				local entry = { _UhAvatar = true, Compose = true, C1 = PresetOffsetCFrame(p), Limb = p.Limb, SlotIndex = p.Slot }
-				if entry.Limb then
-					if claimedLimbs[entry.Limb] then
-						entry.Limb = nil
-					else
-						claimedLimbs[entry.Limb] = true
+				if not IsNoopPreset(p) then
+					local entry = { _UhAvatar = true, Compose = true, C1 = PresetOffsetCFrame(p), Limb = p.Limb, SlotIndex = p.Slot }
+					if entry.Limb then
+						if claimedLimbs[entry.Limb] then
+							entry.Limb = nil
+						else
+							claimedLimbs[entry.Limb] = true
+						end
 					end
+					local mid, tid = NormalizeId(p.MeshId), NormalizeId(p.TextureId)
+					if mid ~= "" then
+						entry.MeshId = mid
+						if tid ~= "" then entry.TextureId = tid end
+					else
+						entry.Name = p.Name
+					end
+					table.insert(ov, 1, entry)
 				end
-				local mid, tid = NormalizeId(p.MeshId), NormalizeId(p.TextureId)
-				if mid ~= "" then
-					entry.MeshId = mid
-					if tid ~= "" then entry.TextureId = tid end
-				else
-					entry.Name = p.Name
-				end
-				table.insert(ov, 1, entry)
 			end
 		end
 		return active
