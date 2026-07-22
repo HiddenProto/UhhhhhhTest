@@ -4474,6 +4474,7 @@ SaveData.Reanimator.LimbInitMode = SaveData.Reanimator.LimbInitMode or 2
 SaveData.Reanimator.LimbReplicateFPS10 = not not SaveData.Reanimator.LimbReplicateFPS10
 SaveData.Reanimator.LimbRoleplay = not not SaveData.Reanimator.LimbRoleplay
 SaveData.Reanimator.LimbUseNaNFling = not not SaveData.Reanimator.LimbUseNaNFling
+SaveData.Reanimator.LimbSubZeroDelay = not not SaveData.Reanimator.LimbSubZeroDelay
 LimbReanimator.Mode = SaveData.Reanimator.LimbMode
 -- 0 = hide rootpart (defaults to 2 when streaming is enabled)
 -- 1 = put rootpart just under void (defaults to 2 when streaming is enabled)
@@ -4491,6 +4492,7 @@ LimbReanimator.InitMode = SaveData.Reanimator.LimbInitMode
 LimbReanimator.ReplicateFPS10 = SaveData.Reanimator.LimbReplicateFPS10
 LimbReanimator.FlingEnabled = not SaveData.Reanimator.LimbRoleplay
 LimbReanimator.UseNaNFling = SaveData.Reanimator.LimbUseNaNFling
+LimbReanimator.SubZeroDelay = SaveData.Reanimator.LimbSubZeroDelay
 LimbReanimator.FlingTargets = {}
 LimbReanimator._TempNotFling = {}
 function LimbReanimator.ShowHitboxes()
@@ -4572,6 +4574,11 @@ function LimbReanimator.Config(parent)
 		LimbReanimator.UseNaNFling = val
 		SaveData.Reanimator.LimbUseNaNFling = val
 	end)
+	UI.CreateSwitch(parent, "Sub 0", LimbReanimator.SubZeroDelay).Changed:Connect(function(val)
+		LimbReanimator.SubZeroDelay = val
+		SaveData.Reanimator.LimbSubZeroDelay = val
+	end)
+	UI.CreateText(parent, "glues RootPart to itself every frame (not just during flings) for fastest possible limb movement replication. needs Physics Glue (Internals Settings) on", 10, Enum.TextXAlignment.Center)
 	Util.LinkDestroyI2C(dmode, RunService.Heartbeat:Connect(function()
 		dmode.Value = LimbReanimator.Mode + 1
 		dvel.Value = LimbReanimator.Velocity + 1
@@ -4762,7 +4769,12 @@ function LimbReanimator.Start()
 			else
 				RootPart.CFrame = rootcf
 				RootPart.Velocity, RootPart.RotVelocity = rootvel, Vector3.zero
-				pcall(sethiddenproperty, RootPart, "PhysicsRepRootPart", nil)
+				-- [SUB 0] same Physics Glue trick as flinging, just kept on continuously
+				-- instead of fling-only. No external target to glue onto here (unlike hats,
+				-- which glue onto RootPart itself), so RootPart glues to itself -- telling
+				-- the replicator to treat its own CFrame writes as instantly authoritative
+				-- instead of applying its usual interpolation smoothing.
+				pcall(sethiddenproperty, RootPart, "PhysicsRepRootPart", (Reanimate.UsePhysicsRepRootPart and LimbReanimator.SubZeroDelay) and RootPart or nil)
 			end
 		end
 		local dorep = true
