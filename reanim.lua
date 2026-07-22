@@ -8177,8 +8177,13 @@ do
 			if ov[i]._UhPreset then table.remove(ov, i) end
 		end
 		for _, p in SaveData.HatPresets do
-			if not p.Disabled then
-				local entry = { _UhPreset = true, Compose = true, C1 = PresetOffsetCFrame(p), Limb = p.Limb, SlotIndex = p.Slot }
+			-- [PROFILE SCOPING] a preset with an explicit Body Part Priority (p.Limb) only
+			-- takes effect while it's part of a matched, active Avatar Config (see
+			-- ApplyAvatarConfigs below) -- it's excluded here so it doesn't force a limb
+			-- globally just for wearing the accessory in any outfit. Plain position/rotation
+			-- presets (no Limb override) still apply everywhere, as before.
+			if not p.Disabled and not p.Limb then
+				local entry = { _UhPreset = true, Compose = true, C1 = PresetOffsetCFrame(p), SlotIndex = p.Slot }
 				local mid, tid = NormalizeId(p.MeshId), NormalizeId(p.TextureId)
 				if mid ~= "" then
 					entry.MeshId = mid
@@ -8268,6 +8273,18 @@ do
 				matches = pmesh == "" and name ~= "" and p.Name == name
 			end
 			if matches and p.Slot == slot then
+				return p
+			end
+		end
+		return nil
+	end
+	-- [BODY PART PRIORITY] only one Limb-flagged ("this is a limb accessory") preset may
+	-- claim a given body part at a time -- a "regular" accessory (no Limb override, just
+	-- riding its auto-detected placement) never conflicts, since it isn't flagged at all.
+	local function FindLimbConflict(preset, newlimb)
+		if not newlimb then return nil end
+		for _, p in SaveData.HatPresets do
+			if p ~= preset and not p.Disabled and p.Limb == newlimb then
 				return p
 			end
 		end
@@ -8429,17 +8446,34 @@ do
 		UI.CreateButton(page, " &lt; Back", 20).Activated:Connect(function() slideOutAnd(RefreshPresetsPage) end)
 		UI.CreateSeparator(page)
 		UI.CreateText(page, preset.Name, 20, Enum.TextXAlignment.Left)
-		UI.CreateSwitch(page, "Enabled", not preset.Disabled).Changed:Connect(function(v)
+		local enabledSwitch = UI.CreateSwitch(page, "Enabled", not preset.Disabled)
+		enabledSwitch.Changed:Connect(function(v)
+			if v and preset.Limb then
+				local conflict = FindLimbConflict(preset, preset.Limb)
+				if conflict then
+					Util.UINotify((conflict.Name or "Another accessory") .. (conflict.Slot and (" (" .. conflict.Slot .. ")") or "") .. " already claims " .. tostring(preset.Limb) .. " -- disable that one first")
+					enabledSwitch.Value = false
+					return
+				end
+			end
 			preset.Disabled = not v
 			pcall(ApplyHatPresets)
 		end)
 		UI.CreateSeparator(page)
 		UI.CreateText(page, "* Body Part Priority *", 14, Enum.TextXAlignment.Center)
-		UI.CreateDropdown(page, "Attach To", BodyPartOptions, LimbToBodyPartOption(preset.Limb)).Changed:Connect(function(val)
-			preset.Limb = BodyPartOptionToLimb(val)
+		local attachDropdown = UI.CreateDropdown(page, "Attach To", BodyPartOptions, LimbToBodyPartOption(preset.Limb))
+		attachDropdown.Changed:Connect(function(val)
+			local newlimb = BodyPartOptionToLimb(val)
+			local conflict = FindLimbConflict(preset, newlimb)
+			if conflict then
+				Util.UINotify((conflict.Name or "Another accessory") .. (conflict.Slot and (" (" .. conflict.Slot .. ")") or "") .. " already claims " .. tostring(newlimb) .. " -- change that one first")
+				attachDropdown.Value = LimbToBodyPartOption(preset.Limb)
+				return
+			end
+			preset.Limb = newlimb
 			pcall(ApplyHatPresets)
 		end)
-		UI.CreateText(page, "forces this accessory onto the chosen body part instead of its auto-detected one; re-tweak Position/Orientation below after changing this", 10, Enum.TextXAlignment.Center)
+		UI.CreateText(page, "forces this accessory onto the chosen body part instead of its auto-detected one; re-tweak Position/Orientation below after changing this. Only takes effect once an Avatar Config (profile) below includes this preset -- save/update one after setting this, or it won't apply while just worn on its own", 10, Enum.TextXAlignment.Center)
 		UI.CreateSeparator(page)
 		UI.CreateText(page, "* Position (studs) *", 14, Enum.TextXAlignment.Center)
 		local axes = {"X", "Y", "Z"}
@@ -8511,7 +8545,16 @@ do
 		for _, p in SaveData.HatPresets do
 			UI.CreateText(PresetsPage, p.Name .. (p.Slot and (" (" .. p.Slot .. ")") or "") .. (p.Disabled and "  [disabled]" or ""), 14, Enum.TextXAlignment.Left)
 			UI.CreateButton(PresetsPage, "Edit", 16).Activated:Connect(function() OpenPresetEditor(p) end)
-			UI.CreateSwitch(PresetsPage, "Enabled", not p.Disabled).Changed:Connect(function(v)
+			local savedEnabledSwitch = UI.CreateSwitch(PresetsPage, "Enabled", not p.Disabled)
+			savedEnabledSwitch.Changed:Connect(function(v)
+				if v and p.Limb then
+					local conflict = FindLimbConflict(p, p.Limb)
+					if conflict then
+						Util.UINotify((conflict.Name or "Another accessory") .. (conflict.Slot and (" (" .. conflict.Slot .. ")") or "") .. " already claims " .. tostring(p.Limb) .. " -- disable that one first")
+						savedEnabledSwitch.Value = false
+						return
+					end
+				end
 				p.Disabled = not v
 				pcall(ApplyHatPresets)
 			end)
